@@ -1,0 +1,11 @@
+date,description,reference,amount
+2026-08-01,Rent - Unit 101 - J. Alvarez,RENT-101-08,1450.00
+2026-08-02,Rent - Unit 204 - M. Chen,RENT-204-08,1600.00
+2026-08-03,Landscaping - GreenScape Co,INV-5521,-320.00
+2026-08-05,Rent - Unit 305 - T. Brooks,RENT-305-08,1275.00
+2026-08-07,Plumbing repair - Unit 204,INV-8834,-410.50
+2026-08-10,Late fee - Unit 101,LATE-101-08,50.00
+2026-08-15,Parking fee - Unit 305,PARK-305-08,75.00
+2026-08-20,Insurance premium,INV-9902,-980.00
+2026-08-22,Rent - Unit 402 - R. Patel,RENT-402-08,1525.00
+2026-08-28,Owner distribution,DIST-08,-2500.00

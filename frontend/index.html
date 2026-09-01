@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reconciliation Agent</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Property Management Reconciliation Agent</h1>
+    <p class="subtitle">Upload your general ledger and bank statement to automatically match transactions.</p>
+  </header>
+
+  <main>
+    <section class="upload-panel">
+      <form id="reconcile-form">
+        <div class="file-field">
+          <label for="gl_file">General ledger (CSV)</label>
+          <input type="file" id="gl_file" name="gl_file" accept=".csv" required />
+        </div>
+        <div class="file-field">
+          <label for="bank_file">Bank statement (CSV)</label>
+          <input type="file" id="bank_file" name="bank_file" accept=".csv" required />
+        </div>
+        <button type="submit" id="submit-btn">Reconcile</button>
+      </form>
+      <p class="hint">
+        Files need a date, description/reference, and an amount column (or separate debit/credit columns).
+        Common header names are detected automatically.
+      </p>
+      <p id="error-banner" class="error-banner" hidden></p>
+    </section>
+
+    <section id="results" hidden>
+      <div class="summary-cards" id="summary-cards"></div>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="matches">Matched</button>
+        <button class="tab-btn" data-tab="unmatched-gl">Unmatched GL</button>
+        <button class="tab-btn" data-tab="unmatched-bank">Unmatched Bank</button>
+        <button id="export-btn" class="export-btn">Export CSV</button>
+      </div>
+
+      <div id="tab-matches" class="tab-panel"></div>
+      <div id="tab-unmatched-gl" class="tab-panel" hidden></div>
+      <div id="tab-unmatched-bank" class="tab-panel" hidden></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
