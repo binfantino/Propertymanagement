@@ -34,3 +34,29 @@ def test_empty_file_raises():
     csv = b"date,description,amount\n"
     with pytest.raises(LedgerParseError):
         parse_ledger_csv(csv, "test.csv")
+
+
+def test_credit_only_no_debit_column_does_not_crash():
+    # A file with only a credit column (no debit/amount) exercises the
+    # scalar-fallback path in the debit/credit branch.
+    csv = b"date,description,credit\n2026-06-25,Deposit,\"$3,998.82 \"\n"
+    df = parse_ledger_csv(csv, "test.csv")
+    assert df.iloc[0]["amount"] == 3998.82
+
+
+def test_debt_typo_recognized_as_debit_column():
+    csv = b"date,description,credit,debt\n2026-06-04,Bill Pay,,$100.00 \n"
+    df = parse_ledger_csv(csv, "test.csv")
+    assert df.iloc[0]["amount"] == -100.0
+
+
+def test_trailing_blank_rows_are_dropped_not_zeroed():
+    csv = (
+        b"date,description,credit,debt\n"
+        b"2026-06-04,Bill Pay,,$100.00 \n"
+        b",,,\n"
+        b",,,\n"
+    )
+    df = parse_ledger_csv(csv, "test.csv")
+    assert len(df) == 1
+    assert df.iloc[0]["amount"] == -100.0

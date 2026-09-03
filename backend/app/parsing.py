@@ -8,7 +8,7 @@ import pandas as pd
 DATE_HEADERS = {"date", "transaction_date", "posted_date", "trans_date", "post_date"}
 DESCRIPTION_HEADERS = {"description", "desc", "memo", "payee", "details", "narrative"}
 AMOUNT_HEADERS = {"amount", "amt", "net_amount", "value"}
-DEBIT_HEADERS = {"debit", "withdrawal", "out", "money_out", "debit_amount"}
+DEBIT_HEADERS = {"debit", "debt", "withdrawal", "out", "money_out", "debit_amount"}
 CREDIT_HEADERS = {"credit", "deposit", "in", "money_in", "credit_amount"}
 REFERENCE_HEADERS = {
     "reference",
@@ -80,9 +80,12 @@ def parse_ledger_csv(raw_bytes: bytes, source_name: str) -> pd.DataFrame:
     if amount_col is not None:
         out["amount"] = _to_amount_series(df[amount_col])
     else:
-        debit = _to_amount_series(df[debit_col]).fillna(0) if debit_col else 0
-        credit = _to_amount_series(df[credit_col]).fillna(0) if credit_col else 0
-        out["amount"] = credit - debit.abs()
+        blanks = pd.Series(float("nan"), index=df.index)
+        debit_raw = _to_amount_series(df[debit_col]) if debit_col else blanks
+        credit_raw = _to_amount_series(df[credit_col]) if credit_col else blanks
+        both_blank = debit_raw.isna() & credit_raw.isna()
+        amount = credit_raw.fillna(0) - debit_raw.fillna(0).abs()
+        out["amount"] = amount.mask(both_blank)
 
     out = out.dropna(subset=["amount"]).reset_index(drop=True)
     if out.empty:
