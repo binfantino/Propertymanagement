@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bottoming Scanner</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Bottoming Scanner</h1>
+    <p class="subtitle">
+      Scans US mid &amp; large-cap stocks for technical bases that look ready to turn up &mdash;
+      oversold RSI recovering, MACD curling higher, volatility contracting, accumulation volume,
+      and bullish reversal candlesticks near a recent low. This is a screening heuristic, not
+      financial advice.
+    </p>
+  </header>
+
+  <section class="controls">
+    <label>
+      Min score
+      <input type="range" id="minScore" min="0" max="100" value="40" />
+      <span id="minScoreValue">40</span>
+    </label>
+    <label>
+      Results
+      <select id="limit">
+        <option value="10">Top 10</option>
+        <option value="25" selected>Top 25</option>
+        <option value="50">Top 50</option>
+        <option value="100">Top 100</option>
+      </select>
+    </label>
+    <label>
+      History
+      <select id="period">
+        <option value="6mo">6 months</option>
+        <option value="1y" selected>1 year</option>
+        <option value="2y">2 years</option>
+      </select>
+    </label>
+    <button id="scanBtn">Scan market</button>
+    <span id="status" class="status"></span>
+  </section>
+
+  <main>
+    <section class="results-panel">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th data-key="score">Score</th>
+            <th data-key="ticker">Ticker</th>
+            <th data-key="verdict">Setup</th>
+            <th data-key="last_close">Last</th>
+            <th data-key="pct_off_low">% Off Low</th>
+            <th data-key="rsi14">RSI(14)</th>
+            <th>Patterns</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+      <p id="emptyState" class="empty-state">Click "Scan market" to run the scan.</p>
+    </section>
+
+    <section class="detail-panel" id="detailPanel" hidden>
+      <div class="detail-header">
+        <h2 id="detailTicker">-</h2>
+        <span id="detailVerdict" class="badge"></span>
+        <span id="detailScore" class="score-big"></span>
+      </div>
+      <div id="chartContainer" class="chart-container"></div>
+      <div id="rsiContainer" class="sub-chart-container"></div>
+      <div id="macdContainer" class="sub-chart-container"></div>
+      <div class="breakdown">
+        <h3>Score breakdown</h3>
+        <div id="componentBars"></div>
+      </div>
+      <div class="patterns">
+        <h3>Recent candlestick signals</h3>
+        <ul id="patternList"></ul>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
