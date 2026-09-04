@@ -13,8 +13,11 @@ class ScanResultOut(BaseModel):
     ticker: str
     score: float
     verdict: str
+    mode: str
     last_close: float
-    pct_off_low: float
+    metric_label: str
+    metric_value: float
+    near_ma: str | None = None
     rsi14: float
     as_of: str
     components: dict[str, float]

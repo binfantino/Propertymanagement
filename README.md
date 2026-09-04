@@ -1,14 +1,26 @@
 # Bottoming Scanner
 
-Scans US mid- and large-cap stocks for technical setups that look like they're
-basing after a decline and turning up -- using classic technical analysis and
-candlestick pattern recognition. It's a screening heuristic to narrow down a
-watchlist, not a trading signal or financial advice.
+Scans US mid- and large-cap stocks for two different technical setups --
+using classic technical analysis and candlestick pattern recognition. These
+are screening heuristics to narrow down a watchlist, not trading signals or
+financial advice.
+
+- **Bottoming Reversal** -- stocks basing *after a decline* and showing signs
+  of turning up.
+- **Uptrend Pullback** -- stocks already in an *established uptrend* that
+  have dipped to the bottom of their trading range (often right into a
+  rising moving average) without breaking trend.
+
+Both are exposed as separate scan modes in the app (toggle at the top of the
+page) and share the same data pipeline and candlestick pattern detectors,
+but score completely different things -- see below.
 
 ## How it scores a stock
 
-For each ticker, ~1 year of daily OHLCV data is pulled and combined into a
-0-100 "bottoming score" from eight independent signals:
+### Bottoming Reversal mode
+
+For each ticker, ~1 year of daily OHLCV data is combined into a 0-100
+"bottoming score" from eight independent signals:
 
 | Signal | Weight | What it looks for |
 |---|---|---|
@@ -21,9 +33,33 @@ For each ticker, ~1 year of daily OHLCV data is pulled and combined into a
 | Candlestick reversal pattern | 15 | Hammer, inverted hammer, dragonfly doji, bullish engulfing, piercing line, morning star, or three white soldiers within the last 5 sessions, weighted higher if it printed right at the low |
 | Higher-low structure | 7 | The most recent swing low sits above the prior swing low |
 
-Stocks trading under $5, or without enough history to compute the
-indicators, are filtered out. See `backend/app/scanner.py` for the exact
-formulas and `backend/app/candlestick.py` for the pattern definitions.
+See `backend/app/scanner.py` for the exact formulas.
+
+### Uptrend Pullback mode
+
+This mode first **gates** on the stock actually being in an established
+uptrend -- price above a rising 200-day SMA -- and excludes everything else
+(a stock in a downtrend is never a "pullback" candidate). Candidates that
+pass are scored 0-100 from six signals:
+
+| Signal | Weight | What it looks for |
+|---|---|---|
+| Uptrend strength | 25 | 50-day SMA above a rising 200-day SMA, plus a persistent higher-low structure over the last ~6 months |
+| Near range bottom / rising MA | 25 | Price sits in the lower ~35% of its last-40-session trading range, and/or within ~4% of a rising 20-, 50-, or 200-day moving average it could be bouncing off of |
+| Healthy pullback depth | 15 | Pulled back roughly 5-20% off its recent high -- enough to be a real dip, not so much it looks like a trend break |
+| RSI in pullback zone | 15 | RSI(14) has cooled to the ~30-55 range (a normal pullback), rather than staying overbought or collapsing into oversold |
+| Volume drying up | 10 | Volume over the last 2 weeks is lower than during the preceding rally -- a low-conviction pullback, not distribution |
+| Candlestick reversal pattern | 10 | A bullish reversal candle near the range low, same pattern set as the Bottoming Reversal mode |
+
+Needs ~1 year+ of history for a meaningful 200-day SMA, so this mode
+auto-upgrades a "6 months" period request to "1 year". See
+`backend/app/pullback_scanner.py` for the exact formulas.
+
+---
+
+Both modes filter out stocks trading under $5, or without enough history to
+compute their indicators. See `backend/app/candlestick.py` for the pattern
+definitions shared by both.
 
 The default scan universe (`backend/app/universe.py`) is a curated static
 list of ~300 S&P 500 / S&P 400 style large- and mid-cap tickers. It can
@@ -49,16 +85,18 @@ newer, wheel-available release automatically; if it still fails, the
 simplest fix is installing Python 3.11, 3.12, or 3.13 instead (all have
 solid wheel coverage today) and creating your virtualenv with that version.
 
-Then open http://localhost:8000 in a browser. Click "Scan market" to run the
-scan (scanning the full ~300-ticker universe can take up to a minute or two
-the first time; results are cached for 15 minutes), then click any row to see
-its candlestick chart, RSI/MACD panes, and score breakdown.
+Then open http://localhost:8000 in a browser. Pick a scan mode at the top,
+click "Scan market" to run it (scanning the full ~300-ticker universe can
+take up to a minute or two the first time; results are cached for 15
+minutes), then click any row to see its candlestick chart, RSI/MACD panes,
+and score breakdown.
 
 ### API
 
-- `GET /api/scan?limit=25&min_score=40&period=1y` -- ranked scan results
-- `GET /api/stock/{ticker}?period=1y` -- OHLCV history, indicators, and score
-  breakdown for one ticker
+- `GET /api/scan?limit=25&min_score=40&period=1y&mode=bottoming` -- ranked
+  scan results. `mode` is `bottoming` (default) or `pullback`.
+- `GET /api/stock/{ticker}?period=1y&mode=bottoming` -- OHLCV history,
+  indicators, and score breakdown for one ticker, scored under the given mode.
 - `GET /api/universe` -- the default ticker list
 
 ## Tests
@@ -68,10 +106,13 @@ pip install -r requirements.txt
 python -m pytest tests/ -v
 ```
 
-Tests cover the indicator math, each candlestick pattern detector, and the
-scanner's scoring behavior against synthetic OHLCV data (a crafted
-decline-base-reversal scenario should outscore both an already-extended
-uptrend and a stock still in freefall).
+Tests cover the indicator math, each candlestick pattern detector, and both
+scanners' scoring behavior against synthetic OHLCV data -- e.g. a crafted
+decline-base-reversal scenario should outscore an already-extended uptrend
+and a stock still in freefall (Bottoming Reversal mode), and a stock that
+pulled back to a rising moving average should outscore one that's still in
+an uptrend but hasn't pulled back yet, while a stock below a declining
+200-day average is excluded outright (Uptrend Pullback mode).
 
 ## Disclaimer
 

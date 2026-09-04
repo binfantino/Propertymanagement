@@ -32,6 +32,29 @@ h1 { margin: 0 0 6px; font-size: 24px; }
   line-height: 1.5;
 }
 
+.mode-toggle {
+  display: flex;
+  gap: 8px;
+  padding: 4px 32px 0;
+}
+
+.mode-btn {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  background: rgba(63,185,80,0.12);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .controls {
   display: flex;
   align-items: center;

@@ -1,6 +1,24 @@
 const API_BASE = "";
 
+const MODES = {
+  bottoming: {
+    subtitle:
+      'Scans US mid &amp; large-cap stocks for technical bases that look ready to turn up &mdash; ' +
+      "oversold RSI recovering, MACD curling higher, volatility contracting, accumulation volume, " +
+      "and bullish reversal candlesticks near a recent low.",
+    metricHeader: "% Off Low",
+  },
+  pullback: {
+    subtitle:
+      "Scans US mid &amp; large-cap stocks already in an established uptrend that have pulled back " +
+      "to the bottom of their trading range &mdash; often right into a rising 20/50/200-day moving " +
+      "average &mdash; on healthy, contracting volume without breaking trend.",
+    metricHeader: "Position in Range",
+  },
+};
+
 const state = {
+  mode: "bottoming",
   results: [],
   sortKey: "score",
   sortDir: -1,
@@ -24,6 +42,23 @@ minScoreInput.addEventListener("input", () => {
 });
 
 scanBtn.addEventListener("click", runScan);
+
+document.querySelectorAll("#modeToggle .mode-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (btn.dataset.mode === state.mode) return;
+    state.mode = btn.dataset.mode;
+    document.querySelectorAll("#modeToggle .mode-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    el("subtitle").innerHTML = MODES[state.mode].subtitle;
+    el("metricHeader").textContent = MODES[state.mode].metricHeader;
+    state.results = [];
+    state.selectedTicker = null;
+    renderTable();
+    detailPanel.hidden = true;
+    emptyState.hidden = false;
+    emptyState.textContent = 'Click "Scan market" to run the scan.';
+    statusEl.textContent = "";
+  });
+});
 
 document.querySelectorAll("#resultsTable thead th[data-key]").forEach((th) => {
   th.addEventListener("click", () => {
@@ -55,6 +90,7 @@ async function runScan() {
     min_score: minScoreInput.value,
     limit: limitSelect.value,
     period: periodSelect.value,
+    mode: state.mode,
   });
 
   try {
@@ -94,7 +130,7 @@ function renderTable() {
       <td><strong>${r.ticker}</strong></td>
       <td>${r.verdict}</td>
       <td>$${r.last_close.toFixed(2)}</td>
-      <td>${r.pct_off_low.toFixed(1)}%</td>
+      <td>${r.metric_value.toFixed(1)}%${r.near_ma ? ` <span class="pattern-tag">${r.near_ma}</span>` : ""}</td>
       <td>${r.rsi14.toFixed(0)}</td>
       <td>${r.patterns.map((p) => `<span class="pattern-tag">${p.name.replace(/_/g, " ")}</span>`).join("")}</td>
     `;
@@ -124,7 +160,7 @@ async function selectTicker(ticker) {
   el("componentBars").innerHTML = "";
   el("patternList").innerHTML = "";
 
-  const params = new URLSearchParams({ period: periodSelect.value });
+  const params = new URLSearchParams({ period: periodSelect.value, mode: state.mode });
   const res = await fetch(`${API_BASE}/api/stock/${ticker}?${params.toString()}`);
   if (!res.ok) {
     el("detailVerdict").textContent = "Failed to load";
@@ -138,10 +174,10 @@ function renderDetail(data) {
   const { result, candles, indicators } = data;
 
   if (result) {
-    el("detailVerdict").textContent = result.verdict;
+    el("detailVerdict").textContent = result.verdict + (result.near_ma ? ` · near rising ${result.near_ma}` : "");
     el("detailScore").textContent = result.score.toFixed(0);
     el("detailScore").style.color = scoreColor(result.score);
-    renderComponents(result.components);
+    renderComponents(result.mode, result.components);
     renderPatterns(result.patterns);
   } else {
     el("detailVerdict").textContent = "Insufficient data";
@@ -207,38 +243,38 @@ function syncTimeScales(chartList) {
   });
 }
 
-const COMPONENT_LABELS = {
-  downtrend_context: "Prior downtrend",
-  proximity_to_low: "Near recent low",
-  rsi_recovery: "RSI oversold recovery",
-  macd_turn: "MACD turning up",
-  volatility_contraction: "Volatility contraction",
-  volume_accumulation: "Volume accumulation",
-  candlestick_pattern: "Candlestick reversal",
-  higher_low_structure: "Higher-low structure",
+const COMPONENT_INFO = {
+  bottoming: {
+    downtrend_context: ["Prior downtrend", 8],
+    proximity_to_low: ["Near recent low", 12],
+    rsi_recovery: ["RSI oversold recovery", 20],
+    macd_turn: ["MACD turning up", 15],
+    volatility_contraction: ["Volatility contraction", 8],
+    volume_accumulation: ["Volume accumulation", 15],
+    candlestick_pattern: ["Candlestick reversal", 15],
+    higher_low_structure: ["Higher-low structure", 7],
+  },
+  pullback: {
+    uptrend_strength: ["Uptrend strength", 25],
+    support_proximity: ["Near range bottom / rising MA", 25],
+    pullback_depth: ["Healthy pullback depth", 15],
+    rsi_pullback_zone: ["RSI in pullback zone", 15],
+    volume_contraction: ["Volume drying up", 10],
+    candlestick_pattern: ["Candlestick reversal", 10],
+  },
 };
 
-const COMPONENT_MAX = {
-  downtrend_context: 8,
-  proximity_to_low: 12,
-  rsi_recovery: 20,
-  macd_turn: 15,
-  volatility_contraction: 8,
-  volume_accumulation: 15,
-  candlestick_pattern: 15,
-  higher_low_structure: 7,
-};
-
-function renderComponents(components) {
+function renderComponents(mode, components) {
+  const info = COMPONENT_INFO[mode] || COMPONENT_INFO.bottoming;
   const container = el("componentBars");
   container.innerHTML = "";
   for (const [key, value] of Object.entries(components)) {
-    const max = COMPONENT_MAX[key] || 1;
+    const [label, max] = info[key] || [key, 1];
     const pct = Math.max(0, Math.min(100, (value / max) * 100));
     const row = document.createElement("div");
     row.className = "component-row";
     row.innerHTML = `
-      <span>${COMPONENT_LABELS[key] || key}</span>
+      <span>${label}</span>
       <div class="component-track"><div class="component-fill" style="width:${pct}%"></div></div>
       <span>${value.toFixed(1)}</span>
     `;

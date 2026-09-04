@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import data
 from .indicators import add_all_indicators
+from .pullback_scanner import PullbackScoreResult, score_ticker_pullback
 from .scanner import ScoreResult, score_ticker
 from .schemas import (
     Candle,
@@ -19,6 +20,19 @@ from .schemas import (
     StockDetailResponse,
 )
 from .universe import DEFAULT_UNIVERSE
+
+# Uptrend-pullback scoring needs a valid, slope-able SMA200, which needs more
+# bars than "6mo" of daily data provides -- silently upgrade to "1y" so that
+# mode doesn't just come back empty.
+MODE_MIN_PERIOD = {"pullback": "1y"}
+_PERIOD_ORDER = ["6mo", "1y", "2y"]
+
+
+def _effective_period(mode: str, period: str) -> str:
+    floor = MODE_MIN_PERIOD.get(mode)
+    if floor and _PERIOD_ORDER.index(period) < _PERIOD_ORDER.index(floor):
+        return floor
+    return period
 
 logging.basicConfig(level=logging.INFO)
 
@@ -32,18 +46,38 @@ app.add_middleware(
 )
 
 
-def _to_out(r: ScoreResult) -> ScanResultOut:
+def _to_out(r: ScoreResult | PullbackScoreResult) -> ScanResultOut:
+    if isinstance(r, PullbackScoreResult):
+        mode = "pullback"
+        metric_label = "Position in range"
+        metric_value = r.position_in_range
+        near_ma = r.near_ma
+    else:
+        mode = "bottoming"
+        metric_label = "% off low"
+        metric_value = r.pct_off_low
+        near_ma = None
+
     return ScanResultOut(
         ticker=r.ticker,
         score=r.score,
         verdict=r.verdict,
+        mode=mode,
         last_close=r.last_close,
-        pct_off_low=r.pct_off_low,
+        metric_label=metric_label,
+        metric_value=metric_value,
+        near_ma=near_ma,
         rsi14=r.rsi14,
         as_of=r.as_of,
         components=r.components,
         patterns=[PatternHit(**p) for p in r.patterns],
     )
+
+
+def _score(mode: str, ticker: str, df) -> ScoreResult | PullbackScoreResult | None:
+    if mode == "pullback":
+        return score_ticker_pullback(ticker, df)
+    return score_ticker(ticker, df)
 
 
 def _safe_float(v) -> float | None:
@@ -71,16 +105,18 @@ def scan(
     limit: int = Query(25, ge=1, le=200),
     min_score: float = Query(40.0, ge=0, le=100),
     period: str = Query("1y", pattern="^(6mo|1y|2y)$"),
+    mode: str = Query("bottoming", pattern="^(bottoming|pullback)$"),
     tickers: str | None = Query(
         None, description="Comma-separated ticker list to scan instead of the default universe"
     ),
 ):
+    period = _effective_period(mode, period)
     universe = [t.strip().upper() for t in tickers.split(",")] if tickers else DEFAULT_UNIVERSE
     histories = data.fetch_batch(universe, period=period)
 
-    results: list[ScoreResult] = []
+    results: list[ScoreResult | PullbackScoreResult] = []
     for ticker, df in histories.items():
-        result = score_ticker(ticker, df)
+        result = _score(mode, ticker, df)
         if result is not None and result.score >= min_score:
             results.append(result)
 
@@ -96,13 +132,18 @@ def scan(
 
 
 @app.get("/api/stock/{ticker}", response_model=StockDetailResponse)
-def stock_detail(ticker: str, period: str = Query("1y", pattern="^(6mo|1y|2y)$")):
+def stock_detail(
+    ticker: str,
+    period: str = Query("1y", pattern="^(6mo|1y|2y)$"),
+    mode: str = Query("bottoming", pattern="^(bottoming|pullback)$"),
+):
     ticker = ticker.upper()
+    period = _effective_period(mode, period)
     raw_df = data.fetch_history(ticker, period=period)
     if raw_df is None or raw_df.empty:
         raise HTTPException(status_code=404, detail=f"No data found for {ticker}")
 
-    result = score_ticker(ticker, raw_df)
+    result = _score(mode, ticker, raw_df)
     df = add_all_indicators(raw_df)
 
     candles = [

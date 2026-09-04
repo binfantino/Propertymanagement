@@ -10,13 +10,18 @@
 <body>
   <header>
     <h1>Bottoming Scanner</h1>
-    <p class="subtitle">
+    <p class="subtitle" id="subtitle">
       Scans US mid &amp; large-cap stocks for technical bases that look ready to turn up &mdash;
       oversold RSI recovering, MACD curling higher, volatility contracting, accumulation volume,
       and bullish reversal candlesticks near a recent low. This is a screening heuristic, not
       financial advice.
     </p>
   </header>
+
+  <section class="mode-toggle" id="modeToggle">
+    <button class="mode-btn active" data-mode="bottoming">Bottoming Reversal</button>
+    <button class="mode-btn" data-mode="pullback">Uptrend Pullback</button>
+  </section>
 
   <section class="controls">
     <label>
@@ -54,7 +59,7 @@
             <th data-key="ticker">Ticker</th>
             <th data-key="verdict">Setup</th>
             <th data-key="last_close">Last</th>
-            <th data-key="pct_off_low">% Off Low</th>
+            <th data-key="metric_value" id="metricHeader">% Off Low</th>
             <th data-key="rsi14">RSI(14)</th>
             <th>Patterns</th>
           </tr>
