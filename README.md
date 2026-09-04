@@ -40,6 +40,15 @@ pip install -r requirements.txt
 uvicorn backend.app.main:app --reload
 ```
 
+**Windows + a brand-new Python version:** if `pip install` tries to compile
+pandas from source (a `meson setup` / `vswhere.exe` error), it means pip
+can't find a prebuilt wheel for your Python version yet -- pandas/numpy
+publish wheels for a new Python release a bit after it comes out.
+`requirements.txt` uses minimum-version constraints so pip should pick a
+newer, wheel-available release automatically; if it still fails, the
+simplest fix is installing Python 3.11, 3.12, or 3.13 instead (all have
+solid wheel coverage today) and creating your virtualenv with that version.
+
 Then open http://localhost:8000 in a browser. Click "Scan market" to run the
 scan (scanning the full ~300-ticker universe can take up to a minute or two
 the first time; results are cached for 15 minutes), then click any row to see
