@@ -1,6 +1,6 @@
 # Bottoming Scanner
 
-Scans US mid- and large-cap stocks for three different technical setups --
+Scans the S&P 500 and Nasdaq-100 for four different technical setups --
 using classic technical analysis and candlestick pattern recognition. These
 are screening heuristics to narrow down a watchlist, not trading signals or
 financial advice.
@@ -13,8 +13,11 @@ financial advice.
 - **Gap Up / Upper Band** -- stocks that gapped up on strong volume and are
   still holding near or above the upper daily Bollinger Band, rather than
   having already faded back and filled the gap.
+- **Gap Fill Reversal** -- stocks that gapped *down* at some point, left that
+  gap unfilled through a decline, and have now gapped back *up* and reclaimed
+  it -- an island-style reversal, distinct from a fresh gap-up breakout.
 
-All three are exposed as separate scan modes in the app (toggle at the top
+All four are exposed as separate scan modes in the app (toggle at the top
 of the page) and share the same data pipeline and indicator math, but score
 completely different things -- see below.
 
@@ -80,16 +83,50 @@ all the way back below the band is excluded outright, since it's no longer
 a live "at the upper band" setup. See `backend/app/gap_scanner.py` for the
 exact formulas.
 
+### Gap Fill Reversal mode
+
+This mode looks for the most recent up-gap (in the last 3 sessions, >=2%),
+then looks further back (up to 60 sessions) for a down-gap that happened
+*before* it. It **gates** on the down-gap having stayed unfilled the whole
+way until the up-gap -- if price had already rallied back above the old
+gap's ceiling through ordinary drift, that up-gap isn't closing anything and
+the ticker is excluded -- and on price having now closed at least 97% of the
+way back to that ceiling. Candidates that pass are scored 0-100 from five
+signals:
+
+| Signal | Weight | What it looks for |
+|---|---|---|
+| Gap closure completeness | 30 | How decisively price has reclaimed the old down-gap's ceiling, rather than just barely scraping it |
+| Up-gap magnitude | 20 | The reclaiming gap is in the same 2-20% sweet spot as Gap Up mode, peaking around 6% |
+| Volume confirmation | 20 | Volume on the up-gap day vs. its own 20-day average |
+| Follow-through | 15 | Closing near the day's high, and price not having slipped back under the old ceiling since reclaiming it |
+| Original down-gap severity | 15 | How large the initial down-gap was -- a bigger hole being filled is a more significant reversal |
+
+A shallow, partial reclaim still qualifies once it crosses the 97% fill
+threshold, just with a lower closure score; a down-gap that was already
+filled by ordinary price action before any new gap up is excluded outright,
+since there's no fresh reversal event to flag. See
+`backend/app/gap_fill_scanner.py` for the exact formulas.
+
 ---
 
-All three modes filter out stocks trading under $5, or without enough
+All four modes filter out stocks trading under $5, or without enough
 history to compute their indicators. See `backend/app/candlestick.py` for
 the candlestick pattern definitions shared by the first two.
 
-The default scan universe (`backend/app/universe.py`) is a curated static
-list of ~300 S&P 500 / S&P 400 style large- and mid-cap tickers. It can
-optionally be refreshed live from Wikipedia's index constituent tables via
-`fetch_live_universe()`, with the static list as a fallback.
+### Scan universe
+
+The app scans the S&P 500 and Nasdaq-100 (`backend/app/universe.py`). On
+each scan it tries to fetch the current, complete constituent lists live
+from Wikipedia (cached for ~24 hours, since index membership rarely
+changes) and falls back to a bundled static snapshot of ~430 tickers if
+that fetch fails -- no internet access, Wikipedia's page layout changing,
+etc. (this is expected, for instance, in network-restricted sandboxes).
+`GET /api/universe` and the scan status line report which one was actually
+used (`live` or `fallback_snapshot`) so it's never ambiguous which universe
+a scan ran against. The static snapshot is a best-effort, point-in-time
+approximation and will drift out of date -- it exists only so the app keeps
+working offline.
 
 ## Running it
 
@@ -111,18 +148,22 @@ simplest fix is installing Python 3.11, 3.12, or 3.13 instead (all have
 solid wheel coverage today) and creating your virtualenv with that version.
 
 Then open http://localhost:8000 in a browser. Pick a scan mode at the top,
-click "Scan market" to run it (scanning the full ~300-ticker universe can
-take up to a minute or two the first time; results are cached for 15
-minutes), then click any row to see its candlestick chart, RSI/MACD panes,
-and score breakdown.
+click "Scan market" to run it (scanning the full S&P 500 + Nasdaq-100
+universe -- ~430-550+ tickers depending on whether the live fetch succeeds --
+can take a minute or two the first time; results are cached for 15 minutes),
+then click any row to see its candlestick chart, RSI/MACD panes, and score
+breakdown.
 
 ### API
 
 - `GET /api/scan?limit=25&min_score=40&period=1y&mode=bottoming` -- ranked
-  scan results. `mode` is `bottoming` (default), `pullback`, or `gap_up`.
+  scan results. `mode` is `bottoming` (default), `pullback`, `gap_up`, or
+  `gap_fill`. Response includes `universe_source` (`live`, `fallback_snapshot`,
+  or `custom`) and `universe_size`.
 - `GET /api/stock/{ticker}?period=1y&mode=bottoming` -- OHLCV history,
   indicators, and score breakdown for one ticker, scored under the given mode.
-- `GET /api/universe` -- the default ticker list
+- `GET /api/universe` -- the current scan universe, plus its `source` and
+  `count`.
 
 ## Tests
 
@@ -131,16 +172,19 @@ pip install -r requirements.txt
 python -m pytest tests/ -v
 ```
 
-Tests cover the indicator math, each candlestick pattern detector, and all
-three scanners' scoring behavior against synthetic OHLCV data -- e.g. a
-crafted decline-base-reversal scenario should outscore an already-extended
-uptrend and a stock still in freefall (Bottoming Reversal mode); a stock
-that pulled back to a rising moving average should outscore one that's
-still in an uptrend but hasn't pulled back yet, while a stock below a
-declining 200-day average is excluded outright (Uptrend Pullback mode); and
-a clean gap-and-hold should outscore one that got partially undercut, while
-a gap that fully faded back below the band is excluded outright (Gap Up /
-Upper Band mode).
+Tests cover the indicator math, each candlestick pattern detector, the
+universe live-fetch/cache/fallback behavior, and all four scanners' scoring
+behavior against synthetic OHLCV data -- e.g. a crafted decline-base-reversal
+scenario should outscore an already-extended uptrend and a stock still in
+freefall (Bottoming Reversal mode); a stock that pulled back to a rising
+moving average should outscore one that's still in an uptrend but hasn't
+pulled back yet, while a stock below a declining 200-day average is excluded
+outright (Uptrend Pullback mode); a clean gap-and-hold should outscore one
+that got partially undercut, while a gap that fully faded back below the
+band is excluded outright (Gap Up / Upper Band mode); and a down-gap that
+stayed open until a later up-gap reclaims it should score well, while a
+down-gap already closed by ordinary drift, or one not yet reclaimed, is
+excluded outright (Gap Fill Reversal mode).
 
 ## Disclaimer
 

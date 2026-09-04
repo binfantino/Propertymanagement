@@ -26,6 +26,7 @@ class ScanResultOut(BaseModel):
 
 class ScanResponse(BaseModel):
     universe_size: int
+    universe_source: str
     scanned: int
     period: str
     results: list[ScanResultOut]

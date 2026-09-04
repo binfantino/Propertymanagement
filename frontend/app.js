@@ -3,24 +3,32 @@ const API_BASE = "";
 const MODES = {
   bottoming: {
     subtitle:
-      'Scans US mid &amp; large-cap stocks for technical bases that look ready to turn up &mdash; ' +
+      'Scans S&amp;P 500 and Nasdaq-100 stocks for technical bases that look ready to turn up &mdash; ' +
       "oversold RSI recovering, MACD curling higher, volatility contracting, accumulation volume, " +
       "and bullish reversal candlesticks near a recent low.",
     metricHeader: "% Off Low",
   },
   pullback: {
     subtitle:
-      "Scans US mid &amp; large-cap stocks already in an established uptrend that have pulled back " +
-      "to the bottom of their trading range &mdash; often right into a rising 20/50/200-day moving " +
-      "average &mdash; on healthy, contracting volume without breaking trend.",
+      "Scans S&amp;P 500 and Nasdaq-100 stocks already in an established uptrend that have pulled " +
+      "back to the bottom of their trading range &mdash; often right into a rising 20/50/200-day " +
+      "moving average &mdash; on healthy, contracting volume without breaking trend.",
     metricHeader: "Position in Range",
   },
   gap_up: {
     subtitle:
-      "Scans US mid &amp; large-cap stocks that gapped up in the last few sessions on above-average " +
-      "volume and are still holding near or above the upper daily Bollinger Band &mdash; a bullish " +
-      "gap-and-go breakout, as opposed to one that has already faded back and filled the gap.",
+      "Scans S&amp;P 500 and Nasdaq-100 stocks that gapped up in the last few sessions on " +
+      "above-average volume and are still holding near or above the upper daily Bollinger Band " +
+      "&mdash; a bullish gap-and-go breakout, as opposed to one that has already faded back and " +
+      "filled the gap.",
     metricHeader: "Gap %",
+  },
+  gap_fill: {
+    subtitle:
+      "Scans S&amp;P 500 and Nasdaq-100 stocks that gapped down at some point, left that gap " +
+      "unfilled through a decline, and have now gapped back up and reclaimed it &mdash; a bullish " +
+      "island-style reversal, as opposed to a gap that was already closed by ordinary drift.",
+    metricHeader: "Fill %",
   },
 };
 
@@ -105,7 +113,13 @@ async function runScan() {
     if (!res.ok) throw new Error(`Scan failed: ${res.status}`);
     const data = await res.json();
     state.results = data.results;
-    statusEl.textContent = `Scanned ${data.scanned}/${data.universe_size} tickers, ${data.results.length} setups shown.`;
+    const universeLabel =
+      data.universe_source === "live"
+        ? "live S&P 500 + Nasdaq-100"
+        : data.universe_source === "custom"
+          ? "custom list"
+          : "offline fallback snapshot";
+    statusEl.textContent = `Scanned ${data.scanned}/${data.universe_size} tickers (${universeLabel}), ${data.results.length} setups shown.`;
     if (data.results.length === 0) {
       emptyState.hidden = false;
       emptyState.textContent = "No setups matched the current filters. Try lowering the min score.";
@@ -275,6 +289,13 @@ const COMPONENT_INFO = {
     volume_confirmation: ["Volume confirmation", 20],
     follow_through: ["Follow-through / gap held", 15],
     trend_context: ["Trend context", 15],
+  },
+  gap_fill: {
+    gap_closure: ["Gap closure completeness", 30],
+    up_gap_magnitude: ["Up-gap magnitude", 20],
+    volume_confirmation: ["Volume confirmation", 20],
+    follow_through: ["Follow-through / held above ceiling", 15],
+    down_gap_severity: ["Original down-gap severity", 15],
   },
 };
 

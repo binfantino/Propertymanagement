@@ -7,7 +7,8 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import data
+from . import data, universe
+from .gap_fill_scanner import GapFillScoreResult, score_ticker_gap_fill
 from .gap_scanner import GapScoreResult, score_ticker_gap
 from .indicators import add_all_indicators
 from .pullback_scanner import PullbackScoreResult, score_ticker_pullback
@@ -20,7 +21,6 @@ from .schemas import (
     ScanResultOut,
     StockDetailResponse,
 )
-from .universe import DEFAULT_UNIVERSE
 
 # Uptrend-pullback scoring needs a valid, slope-able SMA200, which needs more
 # bars than "6mo" of daily data provides -- silently upgrade to "1y" so that
@@ -47,7 +47,7 @@ app.add_middleware(
 )
 
 
-def _to_out(r: ScoreResult | PullbackScoreResult | GapScoreResult) -> ScanResultOut:
+def _to_out(r: ScoreResult | PullbackScoreResult | GapScoreResult | GapFillScoreResult) -> ScanResultOut:
     if isinstance(r, PullbackScoreResult):
         mode = "pullback"
         metric_label = "Position in range"
@@ -57,6 +57,11 @@ def _to_out(r: ScoreResult | PullbackScoreResult | GapScoreResult) -> ScanResult
         mode = "gap_up"
         metric_label = "Gap %"
         metric_value = r.gap_pct
+        near_ma = None
+    elif isinstance(r, GapFillScoreResult):
+        mode = "gap_fill"
+        metric_label = "Fill %"
+        metric_value = r.fill_ratio
         near_ma = None
     else:
         mode = "bottoming"
@@ -80,11 +85,15 @@ def _to_out(r: ScoreResult | PullbackScoreResult | GapScoreResult) -> ScanResult
     )
 
 
-def _score(mode: str, ticker: str, df) -> ScoreResult | PullbackScoreResult | GapScoreResult | None:
+def _score(
+    mode: str, ticker: str, df
+) -> ScoreResult | PullbackScoreResult | GapScoreResult | GapFillScoreResult | None:
     if mode == "pullback":
         return score_ticker_pullback(ticker, df)
     if mode == "gap_up":
         return score_ticker_gap(ticker, df)
+    if mode == "gap_fill":
+        return score_ticker_gap_fill(ticker, df)
     return score_ticker(ticker, df)
 
 
@@ -104,8 +113,9 @@ def health():
 
 
 @app.get("/api/universe")
-def get_universe():
-    return {"count": len(DEFAULT_UNIVERSE), "tickers": DEFAULT_UNIVERSE}
+def get_universe_endpoint():
+    info = universe.get_universe_info()
+    return {"count": info["count"], "source": info["source"], "tickers": info["tickers"]}
 
 
 @app.get("/api/scan", response_model=ScanResponse)
@@ -113,16 +123,22 @@ def scan(
     limit: int = Query(25, ge=1, le=200),
     min_score: float = Query(40.0, ge=0, le=100),
     period: str = Query("1y", pattern="^(6mo|1y|2y)$"),
-    mode: str = Query("bottoming", pattern="^(bottoming|pullback|gap_up)$"),
+    mode: str = Query("bottoming", pattern="^(bottoming|pullback|gap_up|gap_fill)$"),
     tickers: str | None = Query(
         None, description="Comma-separated ticker list to scan instead of the default universe"
     ),
 ):
     period = _effective_period(mode, period)
-    universe = [t.strip().upper() for t in tickers.split(",")] if tickers else DEFAULT_UNIVERSE
-    histories = data.fetch_batch(universe, period=period)
+    if tickers:
+        scan_universe = [t.strip().upper() for t in tickers.split(",")]
+        universe_source = "custom"
+    else:
+        universe_info = universe.get_universe_info()
+        scan_universe = universe_info["tickers"]
+        universe_source = universe_info["source"]
+    histories = data.fetch_batch(scan_universe, period=period)
 
-    results: list[ScoreResult | PullbackScoreResult | GapScoreResult] = []
+    results: list[ScoreResult | PullbackScoreResult | GapScoreResult | GapFillScoreResult] = []
     for ticker, df in histories.items():
         result = _score(mode, ticker, df)
         if result is not None and result.score >= min_score:
@@ -132,7 +148,8 @@ def scan(
     top = results[:limit]
 
     return ScanResponse(
-        universe_size=len(universe),
+        universe_size=len(scan_universe),
+        universe_source=universe_source,
         scanned=len(histories),
         period=period,
         results=[_to_out(r) for r in top],
@@ -143,7 +160,7 @@ def scan(
 def stock_detail(
     ticker: str,
     period: str = Query("1y", pattern="^(6mo|1y|2y)$"),
-    mode: str = Query("bottoming", pattern="^(bottoming|pullback|gap_up)$"),
+    mode: str = Query("bottoming", pattern="^(bottoming|pullback|gap_up|gap_fill)$"),
 ):
     ticker = ticker.upper()
     period = _effective_period(mode, period)
