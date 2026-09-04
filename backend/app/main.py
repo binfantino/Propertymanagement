@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import data
+from .gap_scanner import GapScoreResult, score_ticker_gap
 from .indicators import add_all_indicators
 from .pullback_scanner import PullbackScoreResult, score_ticker_pullback
 from .scanner import ScoreResult, score_ticker
@@ -46,12 +47,17 @@ app.add_middleware(
 )
 
 
-def _to_out(r: ScoreResult | PullbackScoreResult) -> ScanResultOut:
+def _to_out(r: ScoreResult | PullbackScoreResult | GapScoreResult) -> ScanResultOut:
     if isinstance(r, PullbackScoreResult):
         mode = "pullback"
         metric_label = "Position in range"
         metric_value = r.position_in_range
         near_ma = r.near_ma
+    elif isinstance(r, GapScoreResult):
+        mode = "gap_up"
+        metric_label = "Gap %"
+        metric_value = r.gap_pct
+        near_ma = None
     else:
         mode = "bottoming"
         metric_label = "% off low"
@@ -74,9 +80,11 @@ def _to_out(r: ScoreResult | PullbackScoreResult) -> ScanResultOut:
     )
 
 
-def _score(mode: str, ticker: str, df) -> ScoreResult | PullbackScoreResult | None:
+def _score(mode: str, ticker: str, df) -> ScoreResult | PullbackScoreResult | GapScoreResult | None:
     if mode == "pullback":
         return score_ticker_pullback(ticker, df)
+    if mode == "gap_up":
+        return score_ticker_gap(ticker, df)
     return score_ticker(ticker, df)
 
 
@@ -105,7 +113,7 @@ def scan(
     limit: int = Query(25, ge=1, le=200),
     min_score: float = Query(40.0, ge=0, le=100),
     period: str = Query("1y", pattern="^(6mo|1y|2y)$"),
-    mode: str = Query("bottoming", pattern="^(bottoming|pullback)$"),
+    mode: str = Query("bottoming", pattern="^(bottoming|pullback|gap_up)$"),
     tickers: str | None = Query(
         None, description="Comma-separated ticker list to scan instead of the default universe"
     ),
@@ -114,7 +122,7 @@ def scan(
     universe = [t.strip().upper() for t in tickers.split(",")] if tickers else DEFAULT_UNIVERSE
     histories = data.fetch_batch(universe, period=period)
 
-    results: list[ScoreResult | PullbackScoreResult] = []
+    results: list[ScoreResult | PullbackScoreResult | GapScoreResult] = []
     for ticker, df in histories.items():
         result = _score(mode, ticker, df)
         if result is not None and result.score >= min_score:
@@ -135,7 +143,7 @@ def scan(
 def stock_detail(
     ticker: str,
     period: str = Query("1y", pattern="^(6mo|1y|2y)$"),
-    mode: str = Query("bottoming", pattern="^(bottoming|pullback)$"),
+    mode: str = Query("bottoming", pattern="^(bottoming|pullback|gap_up)$"),
 ):
     ticker = ticker.upper()
     period = _effective_period(mode, period)

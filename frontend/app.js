@@ -15,6 +15,13 @@ const MODES = {
       "average &mdash; on healthy, contracting volume without breaking trend.",
     metricHeader: "Position in Range",
   },
+  gap_up: {
+    subtitle:
+      "Scans US mid &amp; large-cap stocks that gapped up in the last few sessions on above-average " +
+      "volume and are still holding near or above the upper daily Bollinger Band &mdash; a bullish " +
+      "gap-and-go breakout, as opposed to one that has already faded back and filled the gap.",
+    metricHeader: "Gap %",
+  },
 };
 
 const state = {
@@ -261,6 +268,13 @@ const COMPONENT_INFO = {
     rsi_pullback_zone: ["RSI in pullback zone", 15],
     volume_contraction: ["Volume drying up", 10],
     candlestick_pattern: ["Candlestick reversal", 10],
+  },
+  gap_up: {
+    gap_magnitude: ["Gap magnitude", 25],
+    upper_band_position: ["At/above upper band", 25],
+    volume_confirmation: ["Volume confirmation", 20],
+    follow_through: ["Follow-through / gap held", 15],
+    trend_context: ["Trend context", 15],
   },
 };
 

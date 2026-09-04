@@ -20,6 +20,9 @@ import pandas as pd
 
 from .candlestick import PATTERN_WEIGHTS, detect_all_patterns
 from .indicators import add_all_indicators
+from .scoring_utils import clamp as _clamp
+from .scoring_utils import series_then_now as _series_then_now
+from .scoring_utils import triangular as _triangular
 
 # Component weights, must sum to 100.
 WEIGHTS = {
@@ -38,36 +41,6 @@ RANGE_WINDOW = 40  # ~2 months, defines the "trading range" for this scan
 RECENT_HIGH_WINDOW = 60
 PATTERN_LOOKBACK = 5
 MA_TOUCH_TOLERANCE = 0.04  # within 4% of a rising MA counts as "testing" it
-
-
-def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
-    if np.isnan(x):
-        return 0.0
-    return max(lo, min(hi, x))
-
-
-def _triangular(x: float, low: float, peak: float, high: float) -> float:
-    """0 at/outside [low, high], rising to 1 at peak. Used for "sweet spot" ranges."""
-    if np.isnan(x) or x <= low or x >= high:
-        return 0.0
-    if x <= peak:
-        return (x - low) / (peak - low)
-    return (high - x) / (high - peak)
-
-
-def _series_then_now(series: pd.Series, lookback: int) -> tuple[float, float] | None:
-    """
-    Value `lookback` valid (non-NaN) points ago vs. the latest valid value.
-    Uses however many valid points are actually available rather than a
-    fixed positional offset, so a series with a long NaN warm-up (e.g. a
-    slow-moving-average column) still gives a usable slope from a shorter
-    history instead of silently returning NaN.
-    """
-    valid = series.dropna()
-    if len(valid) < 2:
-        return None
-    idx = min(lookback, len(valid) - 1)
-    return float(valid.iloc[-idx - 1]), float(valid.iloc[-1])
 
 
 @dataclass

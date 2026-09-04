@@ -1,6 +1,6 @@
 # Bottoming Scanner
 
-Scans US mid- and large-cap stocks for two different technical setups --
+Scans US mid- and large-cap stocks for three different technical setups --
 using classic technical analysis and candlestick pattern recognition. These
 are screening heuristics to narrow down a watchlist, not trading signals or
 financial advice.
@@ -10,10 +10,13 @@ financial advice.
 - **Uptrend Pullback** -- stocks already in an *established uptrend* that
   have dipped to the bottom of their trading range (often right into a
   rising moving average) without breaking trend.
+- **Gap Up / Upper Band** -- stocks that gapped up on strong volume and are
+  still holding near or above the upper daily Bollinger Band, rather than
+  having already faded back and filled the gap.
 
-Both are exposed as separate scan modes in the app (toggle at the top of the
-page) and share the same data pipeline and candlestick pattern detectors,
-but score completely different things -- see below.
+All three are exposed as separate scan modes in the app (toggle at the top
+of the page) and share the same data pipeline and indicator math, but score
+completely different things -- see below.
 
 ## How it scores a stock
 
@@ -55,11 +58,33 @@ Needs ~1 year+ of history for a meaningful 200-day SMA, so this mode
 auto-upgrades a "6 months" period request to "1 year". See
 `backend/app/pullback_scanner.py` for the exact formulas.
 
+### Gap Up / Upper Band mode
+
+This mode looks for the largest up-gap (today's open vs. the prior close) in
+the last 3 sessions and **gates** on two things: the gap must be at least 2%,
+and the stock must currently be trading in the top 30% of its Bollinger Band
+width (%B >= 0.85) -- i.e. it's still up near the band today, not a gap that
+already faded. Candidates that pass are scored 0-100 from five signals:
+
+| Signal | Weight | What it looks for |
+|---|---|---|
+| Gap magnitude | 25 | The qualifying gap is in a "real but not exhausted" 2-20% sweet spot, peaking around 6% |
+| At/above upper band | 25 | How far into (or past) the upper Bollinger Band the current close sits -- full credit at or above the band |
+| Volume confirmation | 20 | Volume on the gap day vs. its own 20-day average -- a real gap should come with a volume surge |
+| Follow-through / gap held | 15 | Closing near the day's high, and the gap not having been filled (price trading back below the pre-gap close) since |
+| Trend context | 15 | Price above a rising 50-day SMA -- a supportive but not required tailwind |
+
+A gap that gets partially undercut intraday but still closes back up near
+the band still qualifies (with a lower follow-through score); one that fades
+all the way back below the band is excluded outright, since it's no longer
+a live "at the upper band" setup. See `backend/app/gap_scanner.py` for the
+exact formulas.
+
 ---
 
-Both modes filter out stocks trading under $5, or without enough history to
-compute their indicators. See `backend/app/candlestick.py` for the pattern
-definitions shared by both.
+All three modes filter out stocks trading under $5, or without enough
+history to compute their indicators. See `backend/app/candlestick.py` for
+the candlestick pattern definitions shared by the first two.
 
 The default scan universe (`backend/app/universe.py`) is a curated static
 list of ~300 S&P 500 / S&P 400 style large- and mid-cap tickers. It can
@@ -94,7 +119,7 @@ and score breakdown.
 ### API
 
 - `GET /api/scan?limit=25&min_score=40&period=1y&mode=bottoming` -- ranked
-  scan results. `mode` is `bottoming` (default) or `pullback`.
+  scan results. `mode` is `bottoming` (default), `pullback`, or `gap_up`.
 - `GET /api/stock/{ticker}?period=1y&mode=bottoming` -- OHLCV history,
   indicators, and score breakdown for one ticker, scored under the given mode.
 - `GET /api/universe` -- the default ticker list
@@ -106,13 +131,16 @@ pip install -r requirements.txt
 python -m pytest tests/ -v
 ```
 
-Tests cover the indicator math, each candlestick pattern detector, and both
-scanners' scoring behavior against synthetic OHLCV data -- e.g. a crafted
-decline-base-reversal scenario should outscore an already-extended uptrend
-and a stock still in freefall (Bottoming Reversal mode), and a stock that
-pulled back to a rising moving average should outscore one that's still in
-an uptrend but hasn't pulled back yet, while a stock below a declining
-200-day average is excluded outright (Uptrend Pullback mode).
+Tests cover the indicator math, each candlestick pattern detector, and all
+three scanners' scoring behavior against synthetic OHLCV data -- e.g. a
+crafted decline-base-reversal scenario should outscore an already-extended
+uptrend and a stock still in freefall (Bottoming Reversal mode); a stock
+that pulled back to a rising moving average should outscore one that's
+still in an uptrend but hasn't pulled back yet, while a stock below a
+declining 200-day average is excluded outright (Uptrend Pullback mode); and
+a clean gap-and-hold should outscore one that got partially undercut, while
+a gap that fully faded back below the band is excluded outright (Gap Up /
+Upper Band mode).
 
 ## Disclaimer
 

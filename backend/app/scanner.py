@@ -20,6 +20,7 @@ import pandas as pd
 
 from .candlestick import PATTERN_WEIGHTS, detect_all_patterns
 from .indicators import add_all_indicators
+from .scoring_utils import clamp as _clamp
 
 # Component weights, must sum to 100.
 WEIGHTS = {
@@ -38,12 +39,6 @@ MIN_BARS = 80
 MIN_PRICE = 5.0
 RECENT_LOW_WINDOW = 60
 PATTERN_LOOKBACK = 5
-
-
-def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
-    if np.isnan(x):
-        return 0.0
-    return max(lo, min(hi, x))
 
 
 @dataclass
