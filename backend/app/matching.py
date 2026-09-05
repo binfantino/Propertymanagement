@@ -93,7 +93,7 @@ def reconcile(gl: pd.DataFrame, bank: pd.DataFrame) -> dict:
     """Reconcile a GL DataFrame against a bank statement DataFrame.
 
     Both DataFrames must have columns: row_id, date, description, reference, amount
-    (as produced by parsing.parse_ledger_csv). Returns a plain dict matching
+    (as produced by parsing.parse_ledger_spreadsheet). Returns a plain dict matching
     schemas.ReconciliationResult's shape.
     """
     candidates = _build_candidates(gl, bank)

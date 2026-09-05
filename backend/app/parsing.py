@@ -48,12 +48,21 @@ def _to_amount_series(series: pd.Series) -> pd.Series:
     return pd.to_numeric(cleaned, errors="coerce")
 
 
-def parse_ledger_csv(raw_bytes: bytes, source_name: str) -> pd.DataFrame:
-    """Parse an uploaded CSV into a DataFrame with columns: date, description, reference, amount."""
+def _read_raw_dataframe(raw_bytes: bytes, source_name: str) -> pd.DataFrame:
+    is_excel = source_name.lower().endswith((".xlsx", ".xls"))
     try:
-        df = pd.read_csv(io.BytesIO(raw_bytes))
+        if is_excel:
+            return pd.read_excel(io.BytesIO(raw_bytes))
+        return pd.read_csv(io.BytesIO(raw_bytes))
     except Exception as exc:  # pragma: no cover - pandas raises many error types
-        raise LedgerParseError(f"Could not read '{source_name}' as CSV: {exc}") from exc
+        kind = "Excel file" if is_excel else "CSV"
+        raise LedgerParseError(f"Could not read '{source_name}' as a {kind}: {exc}") from exc
+
+
+def parse_ledger_spreadsheet(raw_bytes: bytes, source_name: str) -> pd.DataFrame:
+    """Parse an uploaded CSV or Excel file into a DataFrame with columns:
+    date, description, reference, amount."""
+    df = _read_raw_dataframe(raw_bytes, source_name)
 
     if df.empty:
         raise LedgerParseError(f"'{source_name}' has no rows.")

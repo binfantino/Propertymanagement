@@ -210,3 +210,154 @@ exportBtn.addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
 });
+
+// --- Push to QuickBooks ---
+
+const qboBanner = document.getElementById("qbo-banner");
+const qboNotConfigured = document.getElementById("qbo-not-configured");
+const qboDisconnected = document.getElementById("qbo-disconnected");
+const qboConnected = document.getElementById("qbo-connected");
+const qboConnectBtn = document.getElementById("qbo-connect-btn");
+const qboDisconnectBtn = document.getElementById("qbo-disconnect-btn");
+const qboCompanyName = document.getElementById("qbo-company-name");
+const qboEnvironment = document.getElementById("qbo-environment");
+const qboPushForm = document.getElementById("qbo-push-form");
+const qboPushBtn = document.getElementById("qbo-push-btn");
+const qboPushError = document.getElementById("qbo-push-error");
+const qboPushResults = document.getElementById("qbo-push-results");
+const qboBankAccount = document.getElementById("qbo_bank_account");
+const qboIncomeAccount = document.getElementById("qbo_income_account");
+const qboExpenseAccount = document.getElementById("qbo_expense_account");
+
+function showQboBanner(message, isError) {
+  qboBanner.textContent = message;
+  qboBanner.classList.toggle("bad", !!isError);
+  qboBanner.hidden = false;
+}
+
+function populateAccountSelect(select, accounts) {
+  select.innerHTML = accounts
+    .map((a) => `<option value="${a.id}">${a.name} (${a.account_type})</option>`)
+    .join("");
+}
+
+async function loadQboAccounts() {
+  const res = await fetch("/api/qbo/accounts");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Could not load QuickBooks accounts.");
+  }
+  const accounts = await res.json();
+  populateAccountSelect(qboBankAccount, accounts);
+  populateAccountSelect(qboIncomeAccount, accounts);
+  populateAccountSelect(qboExpenseAccount, accounts);
+}
+
+async function refreshQboStatus() {
+  const res = await fetch("/api/qbo/status");
+  const status = await res.json();
+
+  qboNotConfigured.hidden = status.configured;
+  qboDisconnected.hidden = !status.configured || status.connected;
+  qboConnected.hidden = !status.connected;
+
+  if (status.connected) {
+    qboCompanyName.textContent = status.company_name || "QuickBooks";
+    qboEnvironment.textContent = status.environment || "";
+    try {
+      await loadQboAccounts();
+    } catch (err) {
+      showQboBanner(err.message, true);
+    }
+  }
+}
+
+qboConnectBtn?.addEventListener("click", () => {
+  window.location.href = "/api/qbo/connect";
+});
+
+qboDisconnectBtn?.addEventListener("click", async () => {
+  await fetch("/api/qbo/disconnect", { method: "POST" });
+  qboPushResults.hidden = true;
+  await refreshQboStatus();
+});
+
+function renderPushResults(summary) {
+  const pills = [
+    { key: "created", label: "Created" },
+    { key: "skipped_duplicate", label: "Already in QuickBooks" },
+    { key: "errors", label: "Errors" },
+  ];
+  const summaryHtml = `
+    <div class="push-summary">
+      ${pills.map((p) => `<span class="pill ${p.key}">${p.label}: ${summary[p.key]}</span>`).join("")}
+    </div>`;
+
+  const rowsHtml = `
+    <table>
+      <thead><tr><th>Status</th><th>Date</th><th>Description</th><th class="amount">Amount</th><th>Detail</th></tr></thead>
+      <tbody>
+        ${summary.results
+          .map(
+            (r) => `
+          <tr>
+            <td><span class="status-pill ${r.status}">${r.status.replace("_", " ")}</span></td>
+            <td>${r.date ?? ""}</td>
+            <td>${r.description}</td>
+            <td class="amount">${fmtMoney(r.amount)}</td>
+            <td>${r.detail || (r.qbo_id ? `${r.qbo_txn_type} #${r.qbo_id}` : "")}</td>
+          </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>`;
+
+  qboPushResults.innerHTML = summaryHtml + rowsHtml;
+  qboPushResults.hidden = false;
+}
+
+qboPushForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  qboPushError.hidden = true;
+  qboPushResults.hidden = true;
+  qboPushBtn.disabled = true;
+  qboPushBtn.textContent = "Pushing...";
+
+  const formData = new FormData();
+  formData.append("spreadsheet", document.getElementById("qbo_spreadsheet").files[0]);
+  formData.append("bank_account_id", qboBankAccount.value);
+  formData.append("income_account_id", qboIncomeAccount.value);
+  formData.append("expense_account_id", qboExpenseAccount.value);
+
+  try {
+    const res = await fetch("/api/qbo/push", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || "Push to QuickBooks failed.");
+    }
+    renderPushResults(data);
+  } catch (err) {
+    qboPushError.textContent = err.message;
+    qboPushError.hidden = false;
+  } finally {
+    qboPushBtn.disabled = false;
+    qboPushBtn.textContent = "Push to QuickBooks";
+  }
+});
+
+(function initQbo() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("qbo_connected")) {
+    showQboBanner("Connected to QuickBooks.", false);
+  } else if (params.get("qbo_error")) {
+    showQboBanner(`QuickBooks connection failed: ${params.get("qbo_error")}`, true);
+  }
+  if (params.has("qbo_connected") || params.has("qbo_error")) {
+    params.delete("qbo_connected");
+    params.delete("qbo_error");
+    const query = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (query ? `?${query}` : ""));
+  }
+
+  refreshQboStatus();
+})();

@@ -1,9 +1,9 @@
-from backend.app.parsing import parse_ledger_csv
+from backend.app.parsing import parse_ledger_spreadsheet
 from backend.app.matching import reconcile
 
 
 def _df(csv: bytes):
-    return parse_ledger_csv(csv, "test.csv")
+    return parse_ledger_spreadsheet(csv, "test.csv")
 
 
 def test_exact_reference_match():

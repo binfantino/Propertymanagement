@@ -1,11 +1,14 @@
+import io
+
+import pandas as pd
 import pytest
 
-from backend.app.parsing import LedgerParseError, parse_ledger_csv
+from backend.app.parsing import LedgerParseError, parse_ledger_spreadsheet
 
 
 def test_parses_standard_amount_column():
     csv = b"date,description,reference,amount\n2026-01-01,Rent,REF1,100.00\n"
-    df = parse_ledger_csv(csv, "test.csv")
+    df = parse_ledger_spreadsheet(csv, "test.csv")
     assert len(df) == 1
     assert df.iloc[0]["amount"] == 100.0
     assert df.iloc[0]["reference"] == "REF1"
@@ -13,40 +16,40 @@ def test_parses_standard_amount_column():
 
 def test_parses_debit_credit_columns():
     csv = b"date,description,debit,credit\n2026-01-01,Deposit,,250.00\n2026-01-02,Withdrawal,40.00,\n"
-    df = parse_ledger_csv(csv, "test.csv")
+    df = parse_ledger_spreadsheet(csv, "test.csv")
     assert df.iloc[0]["amount"] == 250.0
     assert df.iloc[1]["amount"] == -40.0
 
 
 def test_handles_parenthesized_negatives_and_currency_symbols():
     csv = b"date,description,amount\n2026-01-01,Fee,\"$(15.00)\"\n"
-    df = parse_ledger_csv(csv, "test.csv")
+    df = parse_ledger_spreadsheet(csv, "test.csv")
     assert df.iloc[0]["amount"] == -15.0
 
 
 def test_missing_amount_column_raises():
     csv = b"date,description\n2026-01-01,No amount here\n"
     with pytest.raises(LedgerParseError):
-        parse_ledger_csv(csv, "test.csv")
+        parse_ledger_spreadsheet(csv, "test.csv")
 
 
 def test_empty_file_raises():
     csv = b"date,description,amount\n"
     with pytest.raises(LedgerParseError):
-        parse_ledger_csv(csv, "test.csv")
+        parse_ledger_spreadsheet(csv, "test.csv")
 
 
 def test_credit_only_no_debit_column_does_not_crash():
     # A file with only a credit column (no debit/amount) exercises the
     # scalar-fallback path in the debit/credit branch.
     csv = b"date,description,credit\n2026-06-25,Deposit,\"$3,998.82 \"\n"
-    df = parse_ledger_csv(csv, "test.csv")
+    df = parse_ledger_spreadsheet(csv, "test.csv")
     assert df.iloc[0]["amount"] == 3998.82
 
 
 def test_debt_typo_recognized_as_debit_column():
     csv = b"date,description,credit,debt\n2026-06-04,Bill Pay,,$100.00 \n"
-    df = parse_ledger_csv(csv, "test.csv")
+    df = parse_ledger_spreadsheet(csv, "test.csv")
     assert df.iloc[0]["amount"] == -100.0
 
 
@@ -57,6 +60,22 @@ def test_trailing_blank_rows_are_dropped_not_zeroed():
         b",,,\n"
         b",,,\n"
     )
-    df = parse_ledger_csv(csv, "test.csv")
+    df = parse_ledger_spreadsheet(csv, "test.csv")
     assert len(df) == 1
     assert df.iloc[0]["amount"] == -100.0
+
+
+def test_parses_xlsx_file():
+    source = pd.DataFrame(
+        {
+            "Date": ["2026-06-25"],
+            "Description": ["Legal One Realty Ownerfunds"],
+            "Amount": [3998.82],
+        }
+    )
+    buf = io.BytesIO()
+    source.to_excel(buf, index=False)
+    df = parse_ledger_spreadsheet(buf.getvalue(), "statement.xlsx")
+    assert len(df) == 1
+    assert df.iloc[0]["amount"] == 3998.82
+    assert df.iloc[0]["description"] == "Legal One Realty Ownerfunds"

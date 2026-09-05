@@ -14,14 +14,15 @@
 
   <main>
     <section class="upload-panel">
+      <h2 class="section-title">Reconcile ledger vs. bank statement</h2>
       <form id="reconcile-form">
         <div class="file-field">
-          <label for="gl_file">General ledger (CSV)</label>
-          <input type="file" id="gl_file" name="gl_file" accept=".csv" required />
+          <label for="gl_file">General ledger (CSV or Excel)</label>
+          <input type="file" id="gl_file" name="gl_file" accept=".csv,.xlsx,.xls" required />
         </div>
         <div class="file-field">
-          <label for="bank_file">Bank statement (CSV)</label>
-          <input type="file" id="bank_file" name="bank_file" accept=".csv" required />
+          <label for="bank_file">Bank statement (CSV or Excel)</label>
+          <input type="file" id="bank_file" name="bank_file" accept=".csv,.xlsx,.xls" required />
         </div>
         <button type="submit" id="submit-btn">Reconcile</button>
       </form>
@@ -45,6 +46,59 @@
       <div id="tab-matches" class="tab-panel"></div>
       <div id="tab-unmatched-gl" class="tab-panel" hidden></div>
       <div id="tab-unmatched-bank" class="tab-panel" hidden></div>
+    </section>
+
+    <section class="upload-panel qbo-panel">
+      <h2 class="section-title">Push to QuickBooks</h2>
+      <p id="qbo-banner" class="qbo-banner" hidden></p>
+
+      <div id="qbo-not-configured" hidden>
+        <p class="hint">
+          QuickBooks isn't configured yet. Set <code>QBO_CLIENT_ID</code>, <code>QBO_CLIENT_SECRET</code>
+          and <code>QBO_REDIRECT_URI</code> (from an Intuit Developer app) on the server, then reload this page.
+          See the README for setup steps.
+        </p>
+      </div>
+
+      <div id="qbo-disconnected" hidden>
+        <button id="qbo-connect-btn">Connect to QuickBooks</button>
+      </div>
+
+      <div id="qbo-connected" hidden>
+        <p class="qbo-company">
+          Connected to <strong id="qbo-company-name"></strong>
+          (<span id="qbo-environment"></span>)
+          <button id="qbo-disconnect-btn" class="link-btn">Disconnect</button>
+        </p>
+
+        <form id="qbo-push-form">
+          <div class="file-field">
+            <label for="qbo_spreadsheet">Transactions (CSV or Excel)</label>
+            <input type="file" id="qbo_spreadsheet" name="spreadsheet" accept=".csv,.xlsx,.xls" required />
+          </div>
+          <div class="qbo-account-fields">
+            <div class="file-field">
+              <label for="qbo_bank_account">Bank account (money moves through)</label>
+              <select id="qbo_bank_account" required></select>
+            </div>
+            <div class="file-field">
+              <label for="qbo_income_account">Income account (for deposits)</label>
+              <select id="qbo_income_account" required></select>
+            </div>
+            <div class="file-field">
+              <label for="qbo_expense_account">Expense account (for purchases)</label>
+              <select id="qbo_expense_account" required></select>
+            </div>
+          </div>
+          <button type="submit" id="qbo-push-btn">Push to QuickBooks</button>
+        </form>
+        <p class="hint">
+          Positive amounts are pushed as Deposits, negative amounts as Purchases. Re-pushing the same
+          file is safe - rows already pushed (same date/description/amount) are skipped automatically.
+        </p>
+        <p id="qbo-push-error" class="error-banner" hidden></p>
+        <div id="qbo-push-results" hidden></div>
+      </div>
     </section>
   </main>
 
