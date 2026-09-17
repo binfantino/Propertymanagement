@@ -10,8 +10,8 @@ from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from quickbooks.objects.account import Account
 
+from .ingest import TransactionsParseError, parse_transactions_file
 from .ofx_export import build_qbo_file
-from .parsing import LedgerParseError, parse_ledger_spreadsheet
 from .qbo import auth as qbo_auth
 from .qbo import client as qbo_client_mod
 from .qbo.config import QBOSettings
@@ -41,12 +41,12 @@ def health() -> dict:
 
 @app.post("/api/transactions/preview", response_model=TransactionsPreview)
 async def preview_transactions(
-    file: UploadFile = File(..., description="Transactions CSV or Excel file"),
+    file: UploadFile = File(..., description="Transactions CSV, Excel, or PDF statement file"),
 ) -> dict:
     raw = await file.read()
     try:
-        df = parse_ledger_spreadsheet(raw, file.filename or "upload")
-    except LedgerParseError as exc:
+        df = parse_transactions_file(raw, file.filename or "upload")
+    except TransactionsParseError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return {"summary": summarize_transactions(df), "entries": to_entries(df)}
@@ -103,15 +103,15 @@ def qbo_accounts() -> list[dict]:
 
 @app.post("/api/qbo/push")
 async def qbo_push(
-    spreadsheet: UploadFile = File(..., description="Transactions CSV or Excel file"),
+    spreadsheet: UploadFile = File(..., description="Transactions CSV, Excel, or PDF statement file"),
     bank_account_id: str = Form(..., description="QBO bank/asset account the money moved through"),
     income_account_id: str = Form(..., description="QBO income account for deposits"),
     expense_account_id: str = Form(..., description="QBO expense account for purchases"),
 ) -> dict:
     raw = await spreadsheet.read()
     try:
-        df = parse_ledger_spreadsheet(raw, spreadsheet.filename or "upload")
-    except LedgerParseError as exc:
+        df = parse_transactions_file(raw, spreadsheet.filename or "upload")
+    except TransactionsParseError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     try:
@@ -131,15 +131,15 @@ async def qbo_push(
 
 @app.post("/api/export/qbo-desktop")
 async def export_qbo_desktop(
-    spreadsheet: UploadFile = File(..., description="Transactions CSV or Excel file"),
+    spreadsheet: UploadFile = File(..., description="Transactions CSV, Excel, or PDF statement file"),
     account_id: str = Form(..., description="Account number as set up in QuickBooks Desktop"),
     account_type: str = Form("CHECKING", description="CHECKING, SAVINGS, or CREDITCARD"),
     bank_id: str = Form("0", description="Routing number (ignored for CREDITCARD)"),
 ) -> PlainTextResponse:
     raw = await spreadsheet.read()
     try:
-        df = parse_ledger_spreadsheet(raw, spreadsheet.filename or "upload")
-    except LedgerParseError as exc:
+        df = parse_transactions_file(raw, spreadsheet.filename or "upload")
+    except TransactionsParseError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     try:

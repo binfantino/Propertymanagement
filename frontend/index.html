@@ -17,14 +17,15 @@
       <h2 class="section-title">Upload transactions</h2>
       <form id="load-form">
         <div class="file-field">
-          <label for="txn_file">Bank statement (CSV or Excel)</label>
-          <input type="file" id="txn_file" name="file" accept=".csv,.xlsx,.xls" required />
+          <label for="txn_file">Bank statement (CSV, Excel, or PDF)</label>
+          <input type="file" id="txn_file" name="file" accept=".csv,.xlsx,.xls,.pdf" required />
         </div>
         <button type="submit" id="load-btn">Load transactions</button>
       </form>
       <p class="hint">
-        Needs a date, description/reference, and an amount column (or separate debit/credit columns).
-        Common header names are detected automatically.
+        CSV/Excel need a date, description/reference, and an amount column (or separate debit/credit
+        columns) - common header names are detected automatically. PDF support is currently limited to
+        Wells Fargo Business Checking statements' "Transaction history" table.
       </p>
       <p id="error-banner" class="error-banner" hidden></p>
     </section>

@@ -8,3 +8,5 @@ httpx>=0.27
 openpyxl>=3.1
 python-quickbooks>=0.9
 intuit-oauth>=1.2
+pdfplumber>=0.11
+reportlab>=4.0  # test-only: generates synthetic PDFs for tests/test_pdf_statement.py

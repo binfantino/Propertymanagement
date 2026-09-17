@@ -1,8 +1,9 @@
 # Property Management QuickBooks Agent
 
-A small web app that takes a property management bank statement (CSV or
-Excel) and gets it into QuickBooks, so book-keeping staff don't have to
-hand-enter every transaction:
+A small web app that takes a property management bank statement (CSV,
+Excel, or a Wells Fargo Business Checking PDF statement) and gets it into
+QuickBooks, so book-keeping staff don't have to hand-enter every
+transaction:
 
 - **QuickBooks Online**: push straight in as Deposits/Purchases via the API -
   see [Push to QuickBooks](#push-to-quickbooks) below.
@@ -15,8 +16,10 @@ re-picking the same file per action.
 
 ## File format
 
-CSV (`.csv`) or Excel (`.xlsx`, `.xls`) are both accepted. Any of these header
-names are auto-detected (case-insensitive):
+### CSV / Excel
+
+`.csv`, `.xlsx`, and `.xls` are accepted. Any of these header names are
+auto-detected (case-insensitive):
 
 | Field | Accepted headers |
 |---|---|
@@ -32,6 +35,23 @@ handled automatically.
 A sample file is in `sample_data/bank_statement.csv` if you want to try it
 out immediately.
 
+### PDF
+
+`.pdf` is accepted too, but scoped narrowly: it currently only understands
+**Wells Fargo Business Checking** statements' "Transaction history" table
+(Date / Check Number / Description / Deposits-Credits / Withdrawals-Debits /
+Ending daily balance). PDF layouts vary enormously between banks, and a
+generic "any bank PDF" parser would risk silently misreading a debit as a
+credit - not something to guess at with real accounting data. See
+`backend/app/pdf_statement.py` for the implementation and its column-position
+approach, and the Roadmap below for extending it to other banks/formats.
+
+As a safety check, the parser sums what it extracted and compares that
+against the statement's own printed "Totals" line; if they don't match, it
+refuses to return data rather than risk returning something silently wrong.
+It also can't read scanned/image-only PDFs (no OCR) - only ones with
+selectable text, which is how Wells Fargo's own statements are generated.
+
 ## Running locally
 
 ```bash
@@ -46,9 +66,9 @@ and click **Load transactions** to see it previewed before pushing/exporting.
 
 ## API
 
-`POST /api/transactions/preview` — multipart form with a `file` upload (CSV
-or Excel), returns a JSON `TransactionsPreview` (see `backend/app/schemas.py`)
-with a summary and the parsed entries.
+`POST /api/transactions/preview` — multipart form with a `file` upload (CSV,
+Excel, or PDF), returns a JSON `TransactionsPreview` (see
+`backend/app/schemas.py`) with a summary and the parsed entries.
 
 ## Push to QuickBooks
 
@@ -143,10 +163,19 @@ QuickBooks connection - there's no sandbox company wired into CI. The
 QuickBooks Desktop export (`tests/test_ofx_export.py`,
 `tests/test_main_export_endpoint.py`) and the transactions preview
 (`tests/test_main_preview_endpoint.py`) need no external service, so those
-run for real, including through the actual FastAPI endpoints.
+run for real, including through the actual FastAPI endpoints. The PDF parser
+(`tests/test_pdf_statement.py`, `tests/test_ingest.py`) is tested against a
+synthetic statement PDF generated with `reportlab` at test time - real bank
+statement data is never checked into this repo.
 
 ## Roadmap / not yet implemented
 
+- PDF support for other banks - `backend/app/pdf_statement.py`'s column
+  positions are specific to Wells Fargo Business Checking; another bank
+  would need its own column-position map (or a more general table-detection
+  approach) and its own totals-line format to validate against
+- OCR for scanned/image-only statement PDFs (current PDF support needs
+  selectable text)
 - Per-row QuickBooks account/category selection (a "category" column in the
   spreadsheet mapped to QBO accounts by name), instead of one default income
   and one default expense account for the whole push
