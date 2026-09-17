@@ -1,5 +1,5 @@
-"""FastAPI app: reconciliation API + static frontend for the property
-management reconciliation agent."""
+"""FastAPI app: transactions API + static frontend for the property
+management QuickBooks agent."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,22 +10,24 @@ from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from quickbooks.objects.account import Account
 
-from .matching import reconcile
 from .ofx_export import build_qbo_file
 from .parsing import LedgerParseError, parse_ledger_spreadsheet
 from .qbo import auth as qbo_auth
 from .qbo import client as qbo_client_mod
 from .qbo.config import QBOSettings
-from .qbo.push import push_transactions, summarize
+from .qbo.push import push_transactions
+from .qbo.push import summarize as summarize_push_results
 from .qbo.store import TokenStore
-from .schemas import ReconciliationResult
+from .schemas import TransactionsPreview
+from .transactions import summarize as summarize_transactions
+from .transactions import to_entries
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 
 app = FastAPI(
-    title="Property Management Reconciliation Agent",
-    description="Reconciles general ledger entries against bank statement transactions.",
-    version="0.1.0",
+    title="Property Management QuickBooks Agent",
+    description="Gets bank transactions into QuickBooks Online or QuickBooks Desktop.",
+    version="0.2.0",
 )
 
 _qbo_settings = QBOSettings.from_env()
@@ -37,21 +39,17 @@ def health() -> dict:
     return {"status": "ok"}
 
 
-@app.post("/api/reconcile", response_model=ReconciliationResult)
-async def reconcile_files(
-    gl_file: UploadFile = File(..., description="General ledger CSV or Excel file"),
-    bank_file: UploadFile = File(..., description="Bank statement CSV or Excel file"),
+@app.post("/api/transactions/preview", response_model=TransactionsPreview)
+async def preview_transactions(
+    file: UploadFile = File(..., description="Transactions CSV or Excel file"),
 ) -> dict:
-    gl_bytes = await gl_file.read()
-    bank_bytes = await bank_file.read()
-
+    raw = await file.read()
     try:
-        gl_df = parse_ledger_spreadsheet(gl_bytes, gl_file.filename or "ledger.csv")
-        bank_df = parse_ledger_spreadsheet(bank_bytes, bank_file.filename or "bank.csv")
+        df = parse_ledger_spreadsheet(raw, file.filename or "upload")
     except LedgerParseError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    return reconcile(gl_df, bank_df)
+    return {"summary": summarize_transactions(df), "entries": to_entries(df)}
 
 
 @app.get("/api/qbo/status")
@@ -128,7 +126,7 @@ async def qbo_push(
         income_account_id=income_account_id,
         expense_account_id=expense_account_id,
     )
-    return summarize(results)
+    return summarize_push_results(results)
 
 
 @app.post("/api/export/qbo-desktop")

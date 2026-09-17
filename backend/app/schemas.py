@@ -1,4 +1,4 @@
-"""Pydantic models for the reconciliation API."""
+"""Pydantic models for the transactions API."""
 from __future__ import annotations
 
 from typing import Optional
@@ -14,31 +14,13 @@ class LedgerEntry(BaseModel):
     amount: float
 
 
-class MatchedPair(BaseModel):
-    gl_entry: LedgerEntry
-    bank_entry: LedgerEntry
-    tier: str
-    confidence: float
-    reason: str
+class TransactionsSummary(BaseModel):
+    entry_count: int
+    total: float
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 
-class ReconciliationSummary(BaseModel):
-    gl_total: float
-    bank_total: float
-    difference: float
-    gl_entry_count: int
-    bank_entry_count: int
-    matched_count: int
-    unmatched_gl_count: int
-    unmatched_bank_count: int
-    matched_gl_total: float
-    matched_bank_total: float
-    unmatched_gl_total: float
-    unmatched_bank_total: float
-
-
-class ReconciliationResult(BaseModel):
-    summary: ReconciliationSummary
-    matches: list[MatchedPair]
-    unmatched_gl: list[LedgerEntry]
-    unmatched_bank: list[LedgerEntry]
+class TransactionsPreview(BaseModel):
+    summary: TransactionsSummary
+    entries: list[LedgerEntry]

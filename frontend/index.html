@@ -3,31 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Reconciliation Agent</title>
+  <title>Property Management QuickBooks Agent</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
   <header>
-    <h1>Property Management Reconciliation Agent</h1>
-    <p class="subtitle">Upload your general ledger and bank statement to automatically match transactions.</p>
+    <h1>Property Management QuickBooks Agent</h1>
+    <p class="subtitle">Upload a bank statement, then push it to QuickBooks Online or export it for QuickBooks Desktop.</p>
   </header>
 
   <main>
     <section class="upload-panel">
-      <h2 class="section-title">Reconcile ledger vs. bank statement</h2>
-      <form id="reconcile-form">
+      <h2 class="section-title">Upload transactions</h2>
+      <form id="load-form">
         <div class="file-field">
-          <label for="gl_file">General ledger (CSV or Excel)</label>
-          <input type="file" id="gl_file" name="gl_file" accept=".csv,.xlsx,.xls" required />
+          <label for="txn_file">Bank statement (CSV or Excel)</label>
+          <input type="file" id="txn_file" name="file" accept=".csv,.xlsx,.xls" required />
         </div>
-        <div class="file-field">
-          <label for="bank_file">Bank statement (CSV or Excel)</label>
-          <input type="file" id="bank_file" name="bank_file" accept=".csv,.xlsx,.xls" required />
-        </div>
-        <button type="submit" id="submit-btn">Reconcile</button>
+        <button type="submit" id="load-btn">Load transactions</button>
       </form>
       <p class="hint">
-        Files need a date, description/reference, and an amount column (or separate debit/credit columns).
+        Needs a date, description/reference, and an amount column (or separate debit/credit columns).
         Common header names are detected automatically.
       </p>
       <p id="error-banner" class="error-banner" hidden></p>
@@ -35,17 +31,11 @@
 
     <section id="results" hidden>
       <div class="summary-cards" id="summary-cards"></div>
-
       <div class="tabs">
-        <button class="tab-btn active" data-tab="matches">Matched</button>
-        <button class="tab-btn" data-tab="unmatched-gl">Unmatched GL</button>
-        <button class="tab-btn" data-tab="unmatched-bank">Unmatched Bank</button>
+        <span class="results-title">Transactions</span>
         <button id="export-btn" class="export-btn">Export CSV</button>
       </div>
-
-      <div id="tab-matches" class="tab-panel"></div>
-      <div id="tab-unmatched-gl" class="tab-panel" hidden></div>
-      <div id="tab-unmatched-bank" class="tab-panel" hidden></div>
+      <div id="tab-transactions"></div>
     </section>
 
     <section class="upload-panel qbo-panel">
@@ -72,10 +62,6 @@
         </p>
 
         <form id="qbo-push-form">
-          <div class="file-field">
-            <label for="qbo_spreadsheet">Transactions (CSV or Excel)</label>
-            <input type="file" id="qbo_spreadsheet" name="spreadsheet" accept=".csv,.xlsx,.xls" required />
-          </div>
           <div class="qbo-account-fields">
             <div class="file-field">
               <label for="qbo_bank_account">Bank account (money moves through)</label>
@@ -90,11 +76,12 @@
               <select id="qbo_expense_account" required></select>
             </div>
           </div>
-          <button type="submit" id="qbo-push-btn">Push to QuickBooks</button>
+          <button type="submit" id="qbo-push-btn" disabled>Push to QuickBooks</button>
         </form>
         <p class="hint">
-          Positive amounts are pushed as Deposits, negative amounts as Purchases. Re-pushing the same
-          file is safe - rows already pushed (same date/description/amount) are skipped automatically.
+          Uses the transactions loaded above. Positive amounts are pushed as Deposits, negative amounts
+          as Purchases. Re-pushing the same file is safe - rows already pushed (same
+          date/description/amount) are skipped automatically.
         </p>
         <p id="qbo-push-error" class="error-banner" hidden></p>
         <div id="qbo-push-results" hidden></div>
@@ -109,10 +96,6 @@
         <strong>File &rarr; Utilities &rarr; Import &rarr; Web Connect Files</strong>.
       </p>
       <form id="desktop-export-form">
-        <div class="file-field">
-          <label for="desktop_spreadsheet">Transactions (CSV or Excel)</label>
-          <input type="file" id="desktop_spreadsheet" name="spreadsheet" accept=".csv,.xlsx,.xls" required />
-        </div>
         <div class="qbo-account-fields">
           <div class="file-field">
             <label for="desktop_account_type">Account type</label>
@@ -131,11 +114,12 @@
             <input type="text" id="desktop_account_id" required />
           </div>
         </div>
-        <button type="submit" id="desktop-export-btn">Download .qbo file</button>
+        <button type="submit" id="desktop-export-btn" disabled>Download .qbo file</button>
       </form>
       <p class="hint">
-        This produces an unmatched "bank download" file - after importing, you'll still Match/Add each
-        transaction in QuickBooks' Online Banking Center, the same as connecting a bank feed live.
+        Uses the transactions loaded above. Produces an unmatched "bank download" file - after
+        importing, you'll still Match/Add each transaction in QuickBooks' Online Banking Center, the
+        same as connecting a bank feed live.
       </p>
       <p id="desktop-export-error" class="error-banner" hidden></p>
     </section>

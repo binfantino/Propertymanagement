@@ -42,7 +42,7 @@ main {
   margin-top: 12px;
 }
 
-#reconcile-form {
+#load-form {
   display: flex;
   gap: 20px;
   align-items: flex-end;
@@ -56,7 +56,7 @@ button, input[type="file"] {
   font: inherit;
 }
 
-#submit-btn, .export-btn {
+#load-btn, .export-btn {
   background: var(--accent);
   color: var(--accent-contrast);
   border: none;
@@ -66,7 +66,7 @@ button, input[type="file"] {
   font-weight: 600;
 }
 
-#submit-btn:disabled { opacity: 0.6; cursor: wait; }
+#load-btn:disabled { opacity: 0.6; cursor: wait; }
 
 .hint { color: var(--muted); font-size: 0.82rem; margin: 14px 0 0; }
 
@@ -107,18 +107,12 @@ button, input[type="file"] {
   margin-bottom: 16px;
 }
 
-.tab-btn {
-  background: none;
-  border: none;
-  padding: 10px 4px;
-  margin-right: 12px;
+.results-title {
   font-size: 0.95rem;
-  color: var(--muted);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
+  font-weight: 600;
+  padding: 10px 4px;
 }
 
-.tab-btn.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
 .export-btn { margin-left: auto; padding: 6px 14px; font-size: 0.85rem; }
 
 table {
@@ -141,16 +135,6 @@ th { background: #fafbfc; color: var(--muted); font-weight: 600; }
 tr:last-child td { border-bottom: none; }
 
 .amount { font-variant-numeric: tabular-nums; text-align: right; }
-.badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 600;
-}
-.badge.exact { background: #e6f4ea; color: var(--good); }
-.badge.strong { background: #e8f0fe; color: var(--accent); }
-.badge.fuzzy { background: #fdf3dc; color: var(--warn); }
 
 .empty-state { color: var(--muted); padding: 24px; text-align: center; }
 
@@ -203,9 +187,7 @@ tr:last-child td { border-bottom: none; }
   margin: 16px 0;
 }
 .qbo-account-fields select,
-.qbo-account-fields input[type="text"],
-#qbo_spreadsheet,
-#desktop_spreadsheet {
+.qbo-account-fields input[type="text"] {
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;

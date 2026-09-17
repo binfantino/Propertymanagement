@@ -1,15 +1,26 @@
-const form = document.getElementById("reconcile-form");
-const submitBtn = document.getElementById("submit-btn");
+// --- Shared state: one uploaded transactions file feeds preview, QBO push, and Desktop export ---
+
+let currentFile = null;
+
+function fmtMoney(value) {
+  return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function updateActionButtonsState() {
+  qboPushBtn.disabled = !currentFile;
+  desktopBtn.disabled = !currentFile;
+}
+
+// --- Upload + preview ---
+
+const loadForm = document.getElementById("load-form");
+const loadBtn = document.getElementById("load-btn");
 const errorBanner = document.getElementById("error-banner");
 const resultsSection = document.getElementById("results");
 const summaryCards = document.getElementById("summary-cards");
 const exportBtn = document.getElementById("export-btn");
 
-let lastResult = null;
-
-function fmtMoney(value) {
-  return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+let lastPreview = null;
 
 function showError(message) {
   errorBanner.textContent = message;
@@ -22,68 +33,26 @@ function clearError() {
 }
 
 function renderSummary(summary) {
-  const diffGood = Math.abs(summary.difference) < 0.01;
   const cards = [
-    { label: "GL total", value: fmtMoney(summary.gl_total) },
-    { label: "Bank total", value: fmtMoney(summary.bank_total) },
-    {
-      label: "Difference",
-      value: fmtMoney(summary.difference),
-      cls: diffGood ? "good" : "bad",
-    },
-    { label: "Matched", value: `${summary.matched_count}` },
-    { label: "Unmatched GL", value: `${summary.unmatched_gl_count}` },
-    { label: "Unmatched Bank", value: `${summary.unmatched_bank_count}` },
+    { label: "Transactions", value: `${summary.entry_count}` },
+    { label: "Total", value: fmtMoney(summary.total) },
+    { label: "Date range", value: summary.start_date ? `${summary.start_date} - ${summary.end_date}` : "-" },
   ];
   summaryCards.innerHTML = cards
     .map(
       (c) => `
       <div class="card">
         <div class="label">${c.label}</div>
-        <div class="value ${c.cls || ""}">${c.value}</div>
+        <div class="value">${c.value}</div>
       </div>`
     )
     .join("");
 }
 
-function renderMatches(matches) {
-  const panel = document.getElementById("tab-matches");
-  if (!matches.length) {
-    panel.innerHTML = `<div class="empty-state">No matches found.</div>`;
-    return;
-  }
-  panel.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>Tier</th><th>GL date</th><th>GL description</th><th class="amount">GL amount</th>
-          <th>Bank date</th><th>Bank description</th><th class="amount">Bank amount</th><th>Why</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${matches
-          .map(
-            (m) => `
-          <tr>
-            <td><span class="badge ${m.tier}">${m.tier}</span></td>
-            <td>${m.gl_entry.date ?? ""}</td>
-            <td>${m.gl_entry.description}</td>
-            <td class="amount">${fmtMoney(m.gl_entry.amount)}</td>
-            <td>${m.bank_entry.date ?? ""}</td>
-            <td>${m.bank_entry.description}</td>
-            <td class="amount">${fmtMoney(m.bank_entry.amount)}</td>
-            <td>${m.reason}</td>
-          </tr>`
-          )
-          .join("")}
-      </tbody>
-    </table>`;
-}
-
-function renderUnmatched(elId, entries) {
-  const panel = document.getElementById(elId);
+function renderTransactions(entries) {
+  const panel = document.getElementById("tab-transactions");
   if (!entries.length) {
-    panel.innerHTML = `<div class="empty-state">Nothing unmatched here.</div>`;
+    panel.innerHTML = `<div class="empty-state">No transactions found.</div>`;
     return;
   }
   panel.innerHTML = `
@@ -105,47 +74,40 @@ function renderUnmatched(elId, entries) {
     </table>`;
 }
 
-function renderResult(result) {
-  lastResult = result;
-  renderSummary(result.summary);
-  renderMatches(result.matches);
-  renderUnmatched("tab-unmatched-gl", result.unmatched_gl);
-  renderUnmatched("tab-unmatched-bank", result.unmatched_bank);
+function renderPreview(preview) {
+  lastPreview = preview;
+  renderSummary(preview.summary);
+  renderTransactions(preview.entries);
   resultsSection.hidden = false;
 }
 
-document.querySelectorAll(".tab-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach((p) => (p.hidden = true));
-    btn.classList.add("active");
-    document.getElementById(`tab-${btn.dataset.tab}`).hidden = false;
-  });
-});
-
-form.addEventListener("submit", async (event) => {
+loadForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   clearError();
-  submitBtn.disabled = true;
-  submitBtn.textContent = "Reconciling...";
+  loadBtn.disabled = true;
+  loadBtn.textContent = "Loading...";
 
+  const file = document.getElementById("txn_file").files[0];
   const formData = new FormData();
-  formData.append("gl_file", document.getElementById("gl_file").files[0]);
-  formData.append("bank_file", document.getElementById("bank_file").files[0]);
+  formData.append("file", file);
 
   try {
-    const res = await fetch("/api/reconcile", { method: "POST", body: formData });
+    const res = await fetch("/api/transactions/preview", { method: "POST", body: formData });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.detail || "Reconciliation failed.");
+      throw new Error(data.detail || "Could not read that file.");
     }
-    renderResult(data);
+    renderPreview(data);
+    currentFile = file;
+    updateActionButtonsState();
   } catch (err) {
     showError(err.message);
     resultsSection.hidden = true;
+    currentFile = null;
+    updateActionButtonsState();
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Reconcile";
+    loadBtn.disabled = false;
+    loadBtn.textContent = "Load transactions";
   }
 });
 
@@ -159,54 +121,13 @@ function toCsv(rows, headers) {
 }
 
 exportBtn.addEventListener("click", () => {
-  if (!lastResult) return;
-  const rows = [
-    ...lastResult.matches.map((m) => ({
-      status: `matched (${m.tier})`,
-      gl_date: m.gl_entry.date,
-      gl_description: m.gl_entry.description,
-      gl_amount: m.gl_entry.amount,
-      bank_date: m.bank_entry.date,
-      bank_description: m.bank_entry.description,
-      bank_amount: m.bank_entry.amount,
-      reason: m.reason,
-    })),
-    ...lastResult.unmatched_gl.map((e) => ({
-      status: "unmatched (GL only)",
-      gl_date: e.date,
-      gl_description: e.description,
-      gl_amount: e.amount,
-      bank_date: "",
-      bank_description: "",
-      bank_amount: "",
-      reason: "",
-    })),
-    ...lastResult.unmatched_bank.map((e) => ({
-      status: "unmatched (bank only)",
-      gl_date: "",
-      gl_description: "",
-      gl_amount: "",
-      bank_date: e.date,
-      bank_description: e.description,
-      bank_amount: e.amount,
-      reason: "",
-    })),
-  ];
-  const csv = toCsv(rows, [
-    "status",
-    "gl_date",
-    "gl_description",
-    "gl_amount",
-    "bank_date",
-    "bank_description",
-    "bank_amount",
-    "reason",
-  ]);
+  if (!lastPreview) return;
+  const csv = toCsv(lastPreview.entries, ["date", "description", "reference", "amount"]);
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "reconciliation_report.csv";
+  a.download = "transactions.csv";
   a.click();
   URL.revokeObjectURL(url);
 });
@@ -320,11 +241,18 @@ qboPushForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   qboPushError.hidden = true;
   qboPushResults.hidden = true;
+
+  if (!currentFile) {
+    qboPushError.textContent = "Load a transactions file above first.";
+    qboPushError.hidden = false;
+    return;
+  }
+
   qboPushBtn.disabled = true;
   qboPushBtn.textContent = "Pushing...";
 
   const formData = new FormData();
-  formData.append("spreadsheet", document.getElementById("qbo_spreadsheet").files[0]);
+  formData.append("spreadsheet", currentFile);
   formData.append("bank_account_id", qboBankAccount.value);
   formData.append("income_account_id", qboIncomeAccount.value);
   formData.append("expense_account_id", qboExpenseAccount.value);
@@ -340,7 +268,7 @@ qboPushForm?.addEventListener("submit", async (event) => {
     qboPushError.textContent = err.message;
     qboPushError.hidden = false;
   } finally {
-    qboPushBtn.disabled = false;
+    qboPushBtn.disabled = !currentFile;
     qboPushBtn.textContent = "Push to QuickBooks";
   }
 });
@@ -379,11 +307,18 @@ updateDesktopFieldsVisibility();
 desktopForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   desktopError.hidden = true;
+
+  if (!currentFile) {
+    desktopError.textContent = "Load a transactions file above first.";
+    desktopError.hidden = false;
+    return;
+  }
+
   desktopBtn.disabled = true;
   desktopBtn.textContent = "Generating...";
 
   const formData = new FormData();
-  formData.append("spreadsheet", document.getElementById("desktop_spreadsheet").files[0]);
+  formData.append("spreadsheet", currentFile);
   formData.append("account_type", desktopAccountType.value);
   formData.append("account_id", document.getElementById("desktop_account_id").value);
   formData.append("bank_id", document.getElementById("desktop_bank_id").value || "0");
@@ -409,7 +344,7 @@ desktopForm?.addEventListener("submit", async (event) => {
     desktopError.textContent = err.message;
     desktopError.hidden = false;
   } finally {
-    desktopBtn.disabled = false;
+    desktopBtn.disabled = !currentFile;
     desktopBtn.textContent = "Download .qbo file";
   }
 });
