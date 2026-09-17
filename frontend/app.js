@@ -361,3 +361,55 @@ qboPushForm?.addEventListener("submit", async (event) => {
 
   refreshQboStatus();
 })();
+
+// --- Export for QuickBooks Desktop (.qbo / Web Connect) ---
+
+const desktopForm = document.getElementById("desktop-export-form");
+const desktopBtn = document.getElementById("desktop-export-btn");
+const desktopError = document.getElementById("desktop-export-error");
+const desktopAccountType = document.getElementById("desktop_account_type");
+const desktopBankIdField = document.getElementById("desktop-bank-id-field");
+
+function updateDesktopFieldsVisibility() {
+  desktopBankIdField.hidden = desktopAccountType.value === "CREDITCARD";
+}
+desktopAccountType?.addEventListener("change", updateDesktopFieldsVisibility);
+updateDesktopFieldsVisibility();
+
+desktopForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  desktopError.hidden = true;
+  desktopBtn.disabled = true;
+  desktopBtn.textContent = "Generating...";
+
+  const formData = new FormData();
+  formData.append("spreadsheet", document.getElementById("desktop_spreadsheet").files[0]);
+  formData.append("account_type", desktopAccountType.value);
+  formData.append("account_id", document.getElementById("desktop_account_id").value);
+  formData.append("bank_id", document.getElementById("desktop_bank_id").value || "0");
+
+  try {
+    const res = await fetch("/api/export/qbo-desktop", { method: "POST", body: formData });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || "Export failed.");
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : "transactions.qbo";
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    desktopError.textContent = err.message;
+    desktopError.hidden = false;
+  } finally {
+    desktopBtn.disabled = false;
+    desktopBtn.textContent = "Download .qbo file";
+  }
+});

@@ -6,11 +6,12 @@ from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from quickbooks.objects.account import Account
 
 from .matching import reconcile
+from .ofx_export import build_qbo_file
 from .parsing import LedgerParseError, parse_ledger_spreadsheet
 from .qbo import auth as qbo_auth
 from .qbo import client as qbo_client_mod
@@ -128,6 +129,32 @@ async def qbo_push(
         expense_account_id=expense_account_id,
     )
     return summarize(results)
+
+
+@app.post("/api/export/qbo-desktop")
+async def export_qbo_desktop(
+    spreadsheet: UploadFile = File(..., description="Transactions CSV or Excel file"),
+    account_id: str = Form(..., description="Account number as set up in QuickBooks Desktop"),
+    account_type: str = Form("CHECKING", description="CHECKING, SAVINGS, or CREDITCARD"),
+    bank_id: str = Form("0", description="Routing number (ignored for CREDITCARD)"),
+) -> PlainTextResponse:
+    raw = await spreadsheet.read()
+    try:
+        df = parse_ledger_spreadsheet(raw, spreadsheet.filename or "upload")
+    except LedgerParseError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    try:
+        content = build_qbo_file(df, account_id=account_id, account_type=account_type, bank_id=bank_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    filename = (Path(spreadsheet.filename or "transactions").stem or "transactions") + ".qbo"
+    return PlainTextResponse(
+        content,
+        media_type="application/vnd.intu.qbo",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 if FRONTEND_DIR.exists():

@@ -11,9 +11,12 @@ Upload two CSV or Excel files, get back:
 - Summary totals and the outstanding difference between the two ledgers
 - A CSV export of the full reconciliation report
 
-It can also **push a transactions spreadsheet straight into QuickBooks Online**
-as Deposits/Purchases, so you don't have to hand-enter what you just reconciled
-- see [Push to QuickBooks](#push-to-quickbooks) below.
+It can also get a transactions spreadsheet into QuickBooks for you:
+- **QuickBooks Online**: push straight in as Deposits/Purchases via the API -
+  see [Push to QuickBooks](#push-to-quickbooks) below.
+- **QuickBooks Desktop**: download a Web Connect (`.qbo`) file to import by
+  hand - see [Export for QuickBooks Desktop](#export-for-quickbooks-desktop)
+  below.
 
 ## How matching works
 
@@ -119,15 +122,43 @@ This is intentionally simple for v1: every deposit goes to one income
 account and every purchase to one expense account, rather than
 per-row categorization - see Roadmap below.
 
+## Export for QuickBooks Desktop
+
+QuickBooks Desktop (Pro, Premier, etc.) doesn't have a public REST API like
+QuickBooks Online does, so there's no "connect" flow for it here - instead,
+`POST /api/export/qbo-desktop` (or the "Export for QuickBooks Desktop" panel
+in the UI) turns a transactions spreadsheet into a **Web Connect (`.qbo`)
+file**, the same OFX-based format banks have used for "download to
+QuickBooks" for decades. It works identically on QuickBooks Desktop 2015
+through the newest release, since that file format hasn't changed.
+
+1. Upload a transactions file (CSV or Excel).
+2. Pick the account type (Checking, Savings, or Credit Card) and enter the
+   account number as it's set up in QuickBooks (and routing number, for
+   Checking/Savings).
+3. Click **Download .qbo file**, then in QuickBooks Desktop go to
+   **File → Utilities → Import → Web Connect Files** and select it.
+
+QuickBooks will bring the transactions into its Online Banking Center as
+unmatched items you Match/Add from there - same as connecting a bank feed
+live, just via a file instead of a direct connection. Every transaction gets
+a `FITID` derived from a hash of its date/description/amount (the same
+dedupe key the QuickBooks Online push uses), so re-importing the same file
+won't create duplicates within that account.
+
 ## Tests
 
 ```bash
 pytest
 ```
 
-Note: the QuickBooks push logic is tested against fakes/mocks of the
+Note: the QuickBooks Online push logic is tested against fakes/mocks of the
 `python-quickbooks` SDK objects (see `tests/test_qbo_push.py`), not a live
-QuickBooks connection - there's no sandbox company wired into CI.
+QuickBooks connection - there's no sandbox company wired into CI. The
+QuickBooks Desktop export (`tests/test_ofx_export.py`,
+`tests/test_main_export_endpoint.py`) needs no external service since it's
+just generating a file, so those tests run for real, including one through
+the actual FastAPI endpoint.
 
 ## Roadmap / not yet implemented
 
@@ -141,3 +172,6 @@ QuickBooks connection - there's no sandbox company wired into CI.
   spreadsheet mapped to QBO accounts by name), instead of one default income
   and one default expense account for the whole push
 - Multi-company QuickBooks support (current token storage is single-company)
+- IIF export for QuickBooks Desktop, as an alternative to Web Connect that
+  can post fully-categorized transactions directly instead of leaving them
+  as unmatched bank-feed items

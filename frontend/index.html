@@ -100,6 +100,45 @@
         <div id="qbo-push-results" hidden></div>
       </div>
     </section>
+
+    <section class="upload-panel">
+      <h2 class="section-title">Export for QuickBooks Desktop</h2>
+      <p class="hint">
+        QuickBooks Desktop doesn't use the same cloud connection as QuickBooks Online. Download a
+        Web Connect (<code>.qbo</code>) file here instead, then import it in QuickBooks Desktop via
+        <strong>File &rarr; Utilities &rarr; Import &rarr; Web Connect Files</strong>.
+      </p>
+      <form id="desktop-export-form">
+        <div class="file-field">
+          <label for="desktop_spreadsheet">Transactions (CSV or Excel)</label>
+          <input type="file" id="desktop_spreadsheet" name="spreadsheet" accept=".csv,.xlsx,.xls" required />
+        </div>
+        <div class="qbo-account-fields">
+          <div class="file-field">
+            <label for="desktop_account_type">Account type</label>
+            <select id="desktop_account_type">
+              <option value="CHECKING">Checking</option>
+              <option value="SAVINGS">Savings</option>
+              <option value="CREDITCARD">Credit card</option>
+            </select>
+          </div>
+          <div class="file-field" id="desktop-bank-id-field">
+            <label for="desktop_bank_id">Routing number</label>
+            <input type="text" id="desktop_bank_id" placeholder="e.g. 111000025" />
+          </div>
+          <div class="file-field">
+            <label for="desktop_account_id">Account number (as set up in QuickBooks)</label>
+            <input type="text" id="desktop_account_id" required />
+          </div>
+        </div>
+        <button type="submit" id="desktop-export-btn">Download .qbo file</button>
+      </form>
+      <p class="hint">
+        This produces an unmatched "bank download" file - after importing, you'll still Match/Add each
+        transaction in QuickBooks' Online Banking Center, the same as connecting a bank feed live.
+      </p>
+      <p id="desktop-export-error" class="error-banner" hidden></p>
+    </section>
   </main>
 
   <script src="/static/app.js"></script>

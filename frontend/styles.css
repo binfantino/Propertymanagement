@@ -185,7 +185,7 @@ tr:last-child td { border-bottom: none; }
   text-decoration: underline;
 }
 
-#qbo-connect-btn, #qbo-push-btn {
+#qbo-connect-btn, #qbo-push-btn, #desktop-export-btn {
   background: var(--accent);
   color: var(--accent-contrast);
   border: none;
@@ -194,7 +194,7 @@ tr:last-child td { border-bottom: none; }
   cursor: pointer;
   font-weight: 600;
 }
-#qbo-push-btn:disabled { opacity: 0.6; cursor: wait; }
+#qbo-push-btn:disabled, #desktop-export-btn:disabled { opacity: 0.6; cursor: wait; }
 
 .qbo-account-fields {
   display: flex;
@@ -202,7 +202,10 @@ tr:last-child td { border-bottom: none; }
   flex-wrap: wrap;
   margin: 16px 0;
 }
-.qbo-account-fields select, #qbo_spreadsheet {
+.qbo-account-fields select,
+.qbo-account-fields input[type="text"],
+#qbo_spreadsheet,
+#desktop_spreadsheet {
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
